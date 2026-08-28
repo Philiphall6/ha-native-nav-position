@@ -2,6 +2,8 @@ const VERSION = "0.1.11";
 const TAG_NAME = "ha-native-nav-position";
 const STYLE_ID = "ha-native-nav-position-style";
 const NAV_ATTR = "data-ha-native-nav-position-active";
+const CONTROL_SIZE_VAR = "--ha-native-nav-control-size";
+const ICON_SIZE_VAR = "--ha-native-nav-icon-size";
 const TAB_SHADOW_HOSTS = new Set([
   "ha-tab-group-tab",
   "mwc-tab",
@@ -123,16 +125,17 @@ function buildTabCss(config) {
   if (!config.hide_labels) return "";
 
   const tabWidth = config.compact ? "48px" : "56px";
-  const iconSize = "24px";
-  const activeSize = "48px";
+  const controlSize = `var(${CONTROL_SIZE_VAR}, ${tabWidth})`;
+  const iconSize = `var(${ICON_SIZE_VAR}, 24px)`;
+  const controlRadius = `calc(${controlSize} / 2)`;
   const headerSelector = `.header[${NAV_ATTR}]`;
 
   return `
     ${headerSelector} ha-tab-group {
-      --mdc-tab-height: 48px !important;
+      --mdc-tab-height: ${controlSize} !important;
       --mdc-tab-indicator-active-indicator-height: 0 !important;
       --mdc-tab-indicator-active-indicator-color: transparent !important;
-      --md-primary-tab-container-height: 48px !important;
+      --md-primary-tab-container-height: ${controlSize} !important;
       --md-primary-tab-active-indicator-height: 0 !important;
       --md-primary-tab-active-indicator-color: transparent !important;
       min-width: 0 !important;
@@ -141,12 +144,12 @@ function buildTabCss(config) {
 
     ${headerSelector} ha-tab-group-tab,
     ${headerSelector} ha-tab-group-tab[class~="icon-only"] {
-      --mdc-tab-min-width: ${tabWidth} !important;
-      --mdc-tab-width: ${tabWidth} !important;
-      --mdc-tab-height: 48px !important;
+      --mdc-tab-min-width: ${controlSize} !important;
+      --mdc-tab-width: ${controlSize} !important;
+      --mdc-tab-height: ${controlSize} !important;
       --mdc-tab-indicator-active-indicator-height: 0 !important;
       --mdc-tab-indicator-active-indicator-color: transparent !important;
-      --md-primary-tab-container-height: 48px !important;
+      --md-primary-tab-container-height: ${controlSize} !important;
       --md-primary-tab-active-indicator-height: 0 !important;
       --md-primary-tab-active-indicator-color: transparent !important;
       --md-focus-ring-color: transparent !important;
@@ -157,13 +160,13 @@ function buildTabCss(config) {
       --mdc-ripple-hover-opacity: 0 !important;
       --mdc-ripple-focus-opacity: 0 !important;
       --mdc-ripple-press-opacity: 0 !important;
-      flex: 0 0 ${tabWidth} !important;
-      width: ${tabWidth} !important;
-      min-width: ${tabWidth} !important;
-      max-width: ${tabWidth} !important;
-      height: 48px !important;
+      flex: 0 0 ${controlSize} !important;
+      width: ${controlSize} !important;
+      min-width: ${controlSize} !important;
+      max-width: ${controlSize} !important;
+      height: ${controlSize} !important;
       margin: 0 1px !important;
-      border-radius: 24px !important;
+      border-radius: ${controlRadius} !important;
       overflow: visible !important;
       color: ${config.inactive_color} !important;
       opacity: 0.82 !important;
@@ -190,12 +193,12 @@ function buildTabCss(config) {
 
     ${headerSelector} ha-tab-group-tab::part(base),
     ${headerSelector} ha-tab-group-tab[class~="icon-only"]::part(base) {
-      width: ${activeSize} !important;
-      min-width: ${activeSize} !important;
-      max-width: ${activeSize} !important;
-      height: ${activeSize} !important;
-      min-height: ${activeSize} !important;
-      max-height: ${activeSize} !important;
+      width: ${controlSize} !important;
+      min-width: ${controlSize} !important;
+      max-width: ${controlSize} !important;
+      height: ${controlSize} !important;
+      min-height: ${controlSize} !important;
+      max-height: ${controlSize} !important;
       padding: 0 !important;
       border-radius: 50% !important;
       background: transparent !important;
@@ -230,10 +233,10 @@ function buildTabCss(config) {
     ${headerSelector} ha-tab-group-tab .mdc-tab__content,
     ${headerSelector} ha-tab-group-tab [part~="content"] {
       width: 100% !important;
-      height: 48px !important;
+      height: ${controlSize} !important;
       padding: 0 !important;
       margin: 0 !important;
-      border-radius: 24px !important;
+      border-radius: ${controlRadius} !important;
       background: transparent !important;
       box-shadow: none !important;
       outline: 0 !important;
@@ -300,15 +303,17 @@ function buildTabShadowCss(config) {
   if (!config.enabled || !config.hide_labels) return "";
 
   const tabWidth = config.compact ? "48px" : "56px";
-  const iconSize = "24px";
+  const controlSize = `var(${CONTROL_SIZE_VAR}, ${tabWidth})`;
+  const iconSize = `var(${ICON_SIZE_VAR}, 24px)`;
+  const controlRadius = `calc(${controlSize} / 2)`;
   const css = `
     :host {
-      --mdc-tab-min-width: ${tabWidth} !important;
-      --mdc-tab-width: ${tabWidth} !important;
-      --mdc-tab-height: 48px !important;
+      --mdc-tab-min-width: ${controlSize} !important;
+      --mdc-tab-width: ${controlSize} !important;
+      --mdc-tab-height: ${controlSize} !important;
       --mdc-tab-indicator-active-indicator-height: 0 !important;
       --mdc-tab-indicator-active-indicator-color: transparent !important;
-      --md-primary-tab-container-height: 48px !important;
+      --md-primary-tab-container-height: ${controlSize} !important;
       --md-primary-tab-active-indicator-height: 0 !important;
       --md-primary-tab-active-indicator-color: transparent !important;
       --md-focus-ring-color: transparent !important;
@@ -319,8 +324,8 @@ function buildTabShadowCss(config) {
       --mdc-ripple-hover-opacity: 0 !important;
       --mdc-ripple-focus-opacity: 0 !important;
       --mdc-ripple-press-opacity: 0 !important;
-      height: 48px !important;
-      border-radius: 24px !important;
+      height: ${controlSize} !important;
+      border-radius: ${controlRadius} !important;
       background: transparent !important;
       box-shadow: none !important;
       outline: 0 !important;
@@ -351,11 +356,11 @@ function buildTabShadowCss(config) {
     .mdc-tab--active,
     button {
       width: 100% !important;
-      height: 48px !important;
-      min-height: 48px !important;
+      height: ${controlSize} !important;
+      min-height: ${controlSize} !important;
       padding: 0 !important;
       margin: 0 !important;
-      border-radius: 24px !important;
+      border-radius: ${controlRadius} !important;
       background: transparent !important;
       border: 0 !important;
       box-shadow: none !important;
@@ -369,7 +374,7 @@ function buildTabShadowCss(config) {
     .mdc-tab__content,
     [part~="content"] {
       width: 100% !important;
-      height: 48px !important;
+      height: ${controlSize} !important;
       padding: 0 !important;
       margin: 0 !important;
       background: transparent !important;
@@ -452,6 +457,9 @@ function buildTabShadowCss(config) {
 
 function buildHeaderCss(config) {
   const headerSelector = `.header[${NAV_ATTR}]`;
+  const controlSize = `var(${CONTROL_SIZE_VAR}, 48px)`;
+  const iconSize = `var(${ICON_SIZE_VAR}, 24px)`;
+  const controlRadius = `calc(${controlSize} / 2)`;
   const dockCss = config.dock
     ? `
       left: max(${config.side_gap}, env(safe-area-inset-left)) !important;
@@ -484,6 +492,7 @@ function buildHeaderCss(config) {
       border: 0 !important;
       box-shadow: none !important;
       align-items: center !important;
+      justify-content: center !important;
     `
     : `
       min-height: ${config.height} !important;
@@ -494,15 +503,15 @@ function buildHeaderCss(config) {
     ${headerSelector} ha-icon-button,
     ${headerSelector} app-toolbar > ha-menu-button,
     ${headerSelector} app-toolbar > ha-icon-button {
-      --mdc-icon-button-size: 48px !important;
-      --mdc-icon-size: 24px !important;
-      flex: 0 0 48px !important;
-      width: 48px !important;
-      min-width: 48px !important;
-      height: 48px !important;
-      min-height: 48px !important;
+      --mdc-icon-button-size: ${controlSize} !important;
+      --mdc-icon-size: ${iconSize} !important;
+      flex: 0 0 ${controlSize} !important;
+      width: ${controlSize} !important;
+      min-width: ${controlSize} !important;
+      height: ${controlSize} !important;
+      min-height: ${controlSize} !important;
       margin: 0 !important;
-      border-radius: 24px !important;
+      border-radius: ${controlRadius} !important;
       background: transparent !important;
       box-shadow: none !important;
       outline: 0 !important;
@@ -626,6 +635,46 @@ function rootQuerySelectorAll(root, selector) {
   return Array.from(root.querySelectorAll(selector));
 }
 
+function clampNumber(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function sizeFromRect(rect, fallback) {
+  if (!rect) return fallback;
+  const sizes = [rect.width, rect.height].filter((value) => Number.isFinite(value) && value > 0);
+  if (!sizes.length) return fallback;
+  return Math.round(Math.min(...sizes));
+}
+
+function findFirstElement(root, selector) {
+  if (!root || !root.querySelector) return null;
+  return root.querySelector(selector);
+}
+
+function findButtonIcon(button) {
+  const selector = "ha-icon, ha-svg-icon, mwc-icon, md-icon, iron-icon, svg, .mdc-icon-button__icon";
+  return findFirstElement(button.shadowRoot, selector) || findFirstElement(button, selector);
+}
+
+function syncHeaderMetrics(header) {
+  const button = header.querySelector(
+    "ha-menu-button, app-toolbar > ha-menu-button, ha-icon-button[slot='navigationIcon'], app-toolbar > ha-icon-button"
+  );
+  if (!button) return;
+
+  const controlSize = clampNumber(sizeFromRect(button.getBoundingClientRect(), 48), 40, 56);
+  const icon = findButtonIcon(button);
+  const iconSize = clampNumber(sizeFromRect(icon?.getBoundingClientRect(), Math.round(controlSize / 2)), 20, 30);
+
+  header.style.setProperty(CONTROL_SIZE_VAR, `${controlSize}px`);
+  header.style.setProperty(ICON_SIZE_VAR, `${iconSize}px`);
+}
+
+function clearHeaderMetrics(header) {
+  header.style.removeProperty(CONTROL_SIZE_VAR);
+  header.style.removeProperty(ICON_SIZE_VAR);
+}
+
 function allowsCurrentRoute() {
   const path = window.location?.pathname || "";
   return !NON_DASHBOARD_PREFIXES.some(
@@ -645,8 +694,10 @@ function updateMarkedHeaders(root, routeEnabled) {
     const shouldMark = routeEnabled && header.classList?.contains("header") && hasNavigationTabs(header);
     if (shouldMark) {
       header.setAttribute(NAV_ATTR, "");
+      syncHeaderMetrics(header);
     } else {
       header.removeAttribute(NAV_ATTR);
+      clearHeaderMetrics(header);
     }
   }
 }
