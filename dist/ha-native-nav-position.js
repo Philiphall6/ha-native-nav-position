@@ -1,7 +1,8 @@
-const VERSION = "0.1.12";
+const VERSION = "0.1.13";
 const TAG_NAME = "ha-native-nav-position";
 const STYLE_ID = "ha-native-nav-position-style";
 const NAV_ATTR = "data-ha-native-nav-position-active";
+const SPACER_ATTR = "data-ha-native-nav-position-spacer";
 const CONTROL_SIZE_VAR = "--ha-native-nav-control-size";
 const ICON_SIZE_VAR = "--ha-native-nav-icon-size";
 const TAB_SHADOW_HOSTS = new Set([
@@ -783,6 +784,88 @@ function clearHeaderMetrics(header) {
   header.style.removeProperty(ICON_SIZE_VAR);
 }
 
+function spacerSize(config) {
+  if (config.position !== "bottom") return "0px";
+  return `calc(${config.bottom_padding} + env(safe-area-inset-bottom))`;
+}
+
+function styleSpacer(spacer, size) {
+  spacer.style.setProperty("display", "block", "important");
+  spacer.style.setProperty("width", "100%", "important");
+  spacer.style.setProperty("height", size, "important");
+  spacer.style.setProperty("min-height", size, "important");
+  spacer.style.setProperty("flex", `0 0 ${size}`, "important");
+  spacer.style.setProperty("grid-column", "1 / -1", "important");
+  spacer.style.setProperty("clear", "both", "important");
+  spacer.style.setProperty("visibility", "hidden", "important");
+  spacer.style.setProperty("pointer-events", "none", "important");
+}
+
+function directSpacer(target) {
+  if (!target?.children) return null;
+  return Array.from(target.children).find((child) => child.hasAttribute?.(SPACER_ATTR)) || null;
+}
+
+function ensureSpacer(target, size) {
+  if (!target?.appendChild) return;
+  let spacer = directSpacer(target);
+  if (!spacer) {
+    spacer = document.createElement("div");
+    spacer.setAttribute(SPACER_ATTR, "");
+    spacer.setAttribute("aria-hidden", "true");
+    target.appendChild(spacer);
+  }
+  styleSpacer(spacer, size);
+}
+
+function removeSpacers(root) {
+  for (const spacer of rootQuerySelectorAll(root, `[${SPACER_ATTR}]`)) {
+    spacer.remove();
+  }
+
+  if (root !== document && root?.children) {
+    for (const child of Array.from(root.children)) {
+      if (child.hasAttribute?.(SPACER_ATTR)) child.remove();
+    }
+  }
+}
+
+function deepestElements(elements) {
+  return elements.filter(
+    (element) => !elements.some((other) => other !== element && element.contains(other))
+  );
+}
+
+function syncViewSpacers(root, routeEnabled, config) {
+  const active =
+    routeEnabled &&
+    config.enabled &&
+    config.position === "bottom" &&
+    (isViewShadowRoot(root) || hasDashboardView(root) || hasMarkedNavigation(root));
+
+  if (!active) {
+    removeSpacers(root);
+    return;
+  }
+
+  const candidates = rootQuerySelectorAll(
+    root,
+    "#view, #root, #columns, main, .view, .root, .columns, .column, .masonry, .sections, .container, .content, .cards"
+  ).filter((element) => !element.closest?.(`[${SPACER_ATTR}], .header`));
+
+  const targets = deepestElements(candidates);
+  const size = spacerSize(config);
+
+  if (!targets.length && root !== document) {
+    ensureSpacer(root, size);
+    return;
+  }
+
+  for (const target of targets) {
+    ensureSpacer(target, size);
+  }
+}
+
 function allowsCurrentRoute() {
   const path = window.location?.pathname || "";
   return !NON_DASHBOARD_PREFIXES.some(
@@ -864,6 +947,7 @@ function observeRoot(root) {
 
 function walkRoots(root, cssText, tabShadowCss, viewShadowCss, routeEnabled) {
   updateMarkedHeaders(root, routeEnabled);
+  syncViewSpacers(root, routeEnabled, state.config);
   installStyle(root, cssText, tabShadowCss, viewShadowCss, routeEnabled);
   observeRoot(root);
 
