@@ -1,4 +1,4 @@
-const VERSION = "0.1.6";
+const VERSION = "0.1.7";
 const TAG_NAME = "ha-native-nav-position";
 const STYLE_ID = "ha-native-nav-position-style";
 
@@ -102,12 +102,16 @@ function buildTabCss(config) {
 
   const tabWidth = config.compact ? "48px" : "56px";
   const iconSize = "24px";
+  const activeSize = "48px";
 
   return `
     ha-tab-group {
       --mdc-tab-height: 48px !important;
       --mdc-tab-indicator-active-indicator-height: 0 !important;
       --mdc-tab-indicator-active-indicator-color: transparent !important;
+      --md-primary-tab-container-height: 48px !important;
+      --md-primary-tab-active-indicator-height: 0 !important;
+      --md-primary-tab-active-indicator-color: transparent !important;
       min-width: 0 !important;
       width: 100% !important;
     }
@@ -119,6 +123,17 @@ function buildTabCss(config) {
       --mdc-tab-height: 48px !important;
       --mdc-tab-indicator-active-indicator-height: 0 !important;
       --mdc-tab-indicator-active-indicator-color: transparent !important;
+      --md-primary-tab-container-height: 48px !important;
+      --md-primary-tab-active-indicator-height: 0 !important;
+      --md-primary-tab-active-indicator-color: transparent !important;
+      --md-focus-ring-color: transparent !important;
+      --md-ripple-hover-color: transparent !important;
+      --md-ripple-pressed-color: transparent !important;
+      --md-ripple-focus-color: transparent !important;
+      --mdc-ripple-color: transparent !important;
+      --mdc-ripple-hover-opacity: 0 !important;
+      --mdc-ripple-focus-opacity: 0 !important;
+      --mdc-ripple-press-opacity: 0 !important;
       flex: 0 0 ${tabWidth} !important;
       width: ${tabWidth} !important;
       min-width: ${tabWidth} !important;
@@ -126,30 +141,44 @@ function buildTabCss(config) {
       height: 48px !important;
       margin: 0 1px !important;
       border-radius: 24px !important;
-      overflow: hidden !important;
+      overflow: visible !important;
       color: ${config.inactive_color} !important;
       opacity: 0.82 !important;
       background: transparent !important;
+      box-shadow: none !important;
+      outline: 0 !important;
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
     }
 
     ha-tab-group-tab[active],
-    ha-tab-group-tab[aria-selected="true"] {
+    ha-tab-group-tab[aria-selected="true"],
+    ha-tab-group-tab[aria-current="page"],
+    ha-tab-group-tab[selected],
+    ha-tab-group-tab.active,
+    ha-tab-group-tab.iron-selected {
       color: ${config.active_color} !important;
       opacity: 1 !important;
       background: transparent !important;
+      box-shadow: none !important;
+      outline: 0 !important;
     }
 
     ha-tab-group-tab::part(base),
     ha-tab-group-tab[class~="icon-only"]::part(base) {
-      width: ${tabWidth} !important;
+      width: ${activeSize} !important;
       min-width: ${tabWidth} !important;
-      height: 48px !important;
+      max-width: ${activeSize} !important;
+      height: ${activeSize} !important;
+      min-height: ${activeSize} !important;
+      max-height: ${activeSize} !important;
       padding: 0 !important;
-      border-radius: 24px !important;
+      border-radius: 50% !important;
       background: transparent !important;
+      border: 0 !important;
+      box-shadow: none !important;
+      outline: 0 !important;
       box-sizing: border-box !important;
       display: flex !important;
       align-items: center !important;
@@ -157,7 +186,11 @@ function buildTabCss(config) {
     }
 
     ha-tab-group-tab[active]::part(base),
-    ha-tab-group-tab[aria-selected="true"]::part(base) {
+    ha-tab-group-tab[aria-selected="true"]::part(base),
+    ha-tab-group-tab[aria-current="page"]::part(base),
+    ha-tab-group-tab[selected]::part(base),
+    ha-tab-group-tab.active::part(base),
+    ha-tab-group-tab.iron-selected::part(base) {
       background: ${config.active_background} !important;
     }
 
@@ -168,11 +201,19 @@ function buildTabCss(config) {
     }
 
     ha-tab-group-tab .mdc-tab,
+    ha-tab-group-tab mwc-tab,
+    ha-tab-group-tab md-primary-tab,
+    ha-tab-group-tab md-secondary-tab,
     ha-tab-group-tab .mdc-tab__content,
     ha-tab-group-tab [part~="content"] {
       width: 100% !important;
       height: 48px !important;
       padding: 0 !important;
+      margin: 0 !important;
+      border-radius: 24px !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      outline: 0 !important;
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
@@ -194,16 +235,40 @@ function buildTabCss(config) {
     }
 
     ha-tab-group-tab .mdc-tab-indicator,
+    ha-tab-group-tab .mdc-tab-indicator--active,
     ha-tab-group-tab .mdc-tab-indicator__content,
+    ha-tab-group-tab .mdc-tab-indicator__content--underline,
+    ha-tab-group-tab .mdc-tab-indicator__content--fade,
+    ha-tab-group-tab [class*="active-indicator"],
+    ha-tab-group-tab [class*="selection-indicator"],
     ha-tab-group-tab .mdc-tab__ripple,
     ha-tab-group-tab mwc-ripple,
     ha-tab-group-tab md-ripple,
+    ha-tab-group-tab md-focus-ring,
     ha-tab-group-tab::part(active-indicator),
-    ha-tab-group-tab::part(indicator) {
+    ha-tab-group-tab::part(activeIndicator),
+    ha-tab-group-tab::part(selection-indicator),
+    ha-tab-group-tab::part(indicator),
+    ha-tab-group-tab::part(ripple),
+    ha-tab-group-tab::part(focus-ring) {
       display: none !important;
       opacity: 0 !important;
       height: 0 !important;
+      width: 0 !important;
       border: 0 !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      transform: scale(0) !important;
+    }
+
+    ha-tab-group-tab .mdc-tab__ripple::before,
+    ha-tab-group-tab .mdc-tab__ripple::after,
+    ha-tab-group-tab::before,
+    ha-tab-group-tab::after {
+      display: none !important;
+      opacity: 0 !important;
+      background: transparent !important;
+      box-shadow: none !important;
     }
   `;
 }
