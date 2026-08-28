@@ -1,4 +1,4 @@
-const VERSION = "0.1.11";
+const VERSION = "0.1.12";
 const TAG_NAME = "ha-native-nav-position";
 const STYLE_ID = "ha-native-nav-position-style";
 const NAV_ATTR = "data-ha-native-nav-position-active";
@@ -9,6 +9,14 @@ const TAB_SHADOW_HOSTS = new Set([
   "mwc-tab",
   "md-primary-tab",
   "md-secondary-tab"
+]);
+const VIEW_SHADOW_HOSTS = new Set([
+  "hui-view",
+  "hui-view-container",
+  "hui-sections-view",
+  "hui-masonry-view",
+  "hui-panel-view",
+  "hui-sidebar-view"
 ]);
 const NON_DASHBOARD_PREFIXES = [
   "/config",
@@ -396,6 +404,7 @@ function buildTabShadowCss(config) {
     ha-icon,
     ha-svg-icon,
     .ha-icon,
+    slot,
     slot[name="icon"] {
       --mdc-icon-size: ${iconSize};
       width: ${iconSize} !important;
@@ -406,6 +415,24 @@ function buildTabShadowCss(config) {
       color: inherit !important;
       line-height: 1 !important;
       transform: none !important;
+    }
+
+    ::slotted(ha-icon),
+    ::slotted(ha-svg-icon),
+    ::slotted(mwc-icon),
+    ::slotted(md-icon),
+    ::slotted(iron-icon),
+    ::slotted(svg),
+    ::slotted(*) {
+      --mdc-icon-size: ${iconSize};
+      width: ${iconSize} !important;
+      height: ${iconSize} !important;
+      min-width: ${iconSize} !important;
+      min-height: ${iconSize} !important;
+      margin: 0 !important;
+      line-height: 1 !important;
+      transform: none !important;
+      box-sizing: border-box !important;
     }
 
     .mdc-tab-indicator,
@@ -443,6 +470,83 @@ function buildTabShadowCss(config) {
       opacity: 0 !important;
       background: transparent !important;
       box-shadow: none !important;
+    }
+  `;
+
+  if (!config.mobile_only) return css;
+
+  return `
+    @media (max-width: ${config.mobile_max_width}) {
+      ${css}
+    }
+  `;
+}
+
+function buildViewShadowCss(config) {
+  if (!config.enabled) return "";
+
+  const bottomSpace = `calc(${config.bottom_padding} + env(safe-area-inset-bottom))`;
+  const topSpace = `calc(${config.top_padding} + env(safe-area-inset-top))`;
+  const blockStart = config.position === "top" ? topSpace : "0px";
+  const blockEnd = config.position === "bottom" ? bottomSpace : "0px";
+  const css = `
+    :host {
+      box-sizing: border-box !important;
+      scroll-padding-top: ${blockStart} !important;
+      scroll-padding-bottom: ${blockEnd} !important;
+    }
+
+    #view,
+    #root,
+    #columns,
+    main,
+    .view,
+    .root,
+    .columns,
+    .column,
+    .masonry,
+    .sections,
+    .container,
+    .content,
+    .cards {
+      box-sizing: border-box !important;
+      scroll-padding-top: ${blockStart} !important;
+      scroll-padding-bottom: ${blockEnd} !important;
+    }
+
+    #view,
+    #root,
+    #columns,
+    main,
+    .view,
+    .root,
+    .columns,
+    .masonry,
+    .sections,
+    .container,
+    .content,
+    .cards {
+      padding-bottom: ${blockEnd} !important;
+    }
+
+    #view::after,
+    #root::after,
+    #columns::after,
+    main::after,
+    .view::after,
+    .root::after,
+    .columns::after,
+    .masonry::after,
+    .sections::after,
+    .container::after,
+    .content::after,
+    .cards::after {
+      content: "" !important;
+      display: block !important;
+      height: ${blockEnd} !important;
+      min-height: ${blockEnd} !important;
+      flex: 0 0 ${blockEnd} !important;
+      pointer-events: none !important;
     }
   `;
 
@@ -630,6 +734,10 @@ function isTabShadowRoot(root) {
   return root !== document && root.host && TAB_SHADOW_HOSTS.has(root.host.localName);
 }
 
+function isViewShadowRoot(root) {
+  return root !== document && root.host && VIEW_SHADOW_HOSTS.has(root.host.localName);
+}
+
 function rootQuerySelectorAll(root, selector) {
   if (!root || !root.querySelectorAll) return [];
   return Array.from(root.querySelectorAll(selector));
@@ -720,17 +828,18 @@ function isMarkedTabShadowRoot(root) {
   return isTabShadowRoot(root) && root.host.closest?.(`.header[${NAV_ATTR}]`);
 }
 
-function rootCss(root, cssText, tabShadowCss, routeEnabled) {
+function rootCss(root, cssText, tabShadowCss, viewShadowCss, routeEnabled) {
   if (!routeEnabled) return "";
   if (isTabShadowRoot(root)) return isMarkedTabShadowRoot(root) ? tabShadowCss : "";
+  if (isViewShadowRoot(root)) return viewShadowCss;
   if (hasMarkedNavigation(root) || hasDashboardView(root)) return cssText;
   return "";
 }
 
-function installStyle(root, cssText, tabShadowCss, routeEnabled) {
+function installStyle(root, cssText, tabShadowCss, viewShadowCss, routeEnabled) {
   const target = root === document ? document.head : root;
   if (!target || !target.querySelector) return;
-  const nextCssText = rootCss(root, cssText, tabShadowCss, routeEnabled);
+  const nextCssText = rootCss(root, cssText, tabShadowCss, viewShadowCss, routeEnabled);
 
   let style = target.querySelector(`#${STYLE_ID}`);
   if (!style) {
@@ -753,9 +862,9 @@ function observeRoot(root) {
   state.observers.set(root, observer);
 }
 
-function walkRoots(root, cssText, tabShadowCss, routeEnabled) {
+function walkRoots(root, cssText, tabShadowCss, viewShadowCss, routeEnabled) {
   updateMarkedHeaders(root, routeEnabled);
-  installStyle(root, cssText, tabShadowCss, routeEnabled);
+  installStyle(root, cssText, tabShadowCss, viewShadowCss, routeEnabled);
   observeRoot(root);
 
   const start = root === document ? document.documentElement : root;
@@ -765,7 +874,7 @@ function walkRoots(root, cssText, tabShadowCss, routeEnabled) {
   let node = walker.currentNode;
   while (node) {
     if (node.shadowRoot) {
-      walkRoots(node.shadowRoot, cssText, tabShadowCss, routeEnabled);
+      walkRoots(node.shadowRoot, cssText, tabShadowCss, viewShadowCss, routeEnabled);
     }
     node = walker.nextNode();
   }
@@ -774,7 +883,13 @@ function walkRoots(root, cssText, tabShadowCss, routeEnabled) {
 function applyStyles() {
   state.applyTimer = 0;
   const routeEnabled = allowsCurrentRoute();
-  walkRoots(document, buildCss(state.config), buildTabShadowCss(state.config), routeEnabled);
+  walkRoots(
+    document,
+    buildCss(state.config),
+    buildTabShadowCss(state.config),
+    buildViewShadowCss(state.config),
+    routeEnabled
+  );
 }
 
 function scheduleApply() {
