@@ -1,4 +1,4 @@
-const VERSION = "0.1.1";
+const VERSION = "0.1.2";
 const TAG_NAME = "ha-native-nav-position";
 const STYLE_ID = "ha-native-nav-position-style";
 
