@@ -1,6 +1,12 @@
-const VERSION = "0.1.7";
+const VERSION = "0.1.8";
 const TAG_NAME = "ha-native-nav-position";
 const STYLE_ID = "ha-native-nav-position-style";
+const TAB_SHADOW_HOSTS = new Set([
+  "ha-tab-group-tab",
+  "mwc-tab",
+  "md-primary-tab",
+  "md-secondary-tab"
+]);
 
 const DEFAULT_CONFIG = {
   enabled: true,
@@ -17,7 +23,7 @@ const DEFAULT_CONFIG = {
   bottom_padding: "108px",
   top_padding: "88px",
   background: "rgba(35, 48, 64, 0.54)",
-  active_background: "rgba(255, 255, 255, 0.16)",
+  active_background: "transparent",
   active_color: "var(--primary-text-color)",
   inactive_color: "rgba(255, 255, 255, 0.78)",
   border: "1px solid rgba(255, 255, 255, 0.18)",
@@ -168,7 +174,7 @@ function buildTabCss(config) {
     ha-tab-group-tab::part(base),
     ha-tab-group-tab[class~="icon-only"]::part(base) {
       width: ${activeSize} !important;
-      min-width: ${tabWidth} !important;
+      min-width: ${activeSize} !important;
       max-width: ${activeSize} !important;
       height: ${activeSize} !important;
       min-height: ${activeSize} !important;
@@ -269,6 +275,171 @@ function buildTabCss(config) {
       opacity: 0 !important;
       background: transparent !important;
       box-shadow: none !important;
+    }
+  `;
+}
+
+function buildTabShadowCss(config) {
+  if (!config.enabled || !config.hide_labels) return "";
+
+  const tabWidth = config.compact ? "48px" : "56px";
+  const activeSize = "48px";
+  const iconSize = "24px";
+  const css = `
+    :host {
+      --mdc-tab-min-width: ${tabWidth} !important;
+      --mdc-tab-width: ${tabWidth} !important;
+      --mdc-tab-height: 48px !important;
+      --mdc-tab-indicator-active-indicator-height: 0 !important;
+      --mdc-tab-indicator-active-indicator-color: transparent !important;
+      --md-primary-tab-container-height: 48px !important;
+      --md-primary-tab-active-indicator-height: 0 !important;
+      --md-primary-tab-active-indicator-color: transparent !important;
+      --md-focus-ring-color: transparent !important;
+      --md-ripple-hover-color: transparent !important;
+      --md-ripple-pressed-color: transparent !important;
+      --md-ripple-focus-color: transparent !important;
+      --mdc-ripple-color: transparent !important;
+      --mdc-ripple-hover-opacity: 0 !important;
+      --mdc-ripple-focus-opacity: 0 !important;
+      --mdc-ripple-press-opacity: 0 !important;
+      flex: 0 0 ${tabWidth} !important;
+      width: ${tabWidth} !important;
+      min-width: ${tabWidth} !important;
+      max-width: ${tabWidth} !important;
+      height: 48px !important;
+      margin: 0 1px !important;
+      border-radius: 24px !important;
+      overflow: visible !important;
+      color: ${config.inactive_color} !important;
+      opacity: 0.82 !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      outline: 0 !important;
+    }
+
+    :host([active]),
+    :host([aria-selected="true"]),
+    :host([aria-current="page"]),
+    :host([selected]),
+    :host(.active),
+    :host(.iron-selected) {
+      color: ${config.active_color} !important;
+      opacity: 1 !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      outline: 0 !important;
+    }
+
+    :host::before,
+    :host::after {
+      display: none !important;
+      opacity: 0 !important;
+      background: transparent !important;
+      box-shadow: none !important;
+    }
+
+    .mdc-tab,
+    .mdc-tab--active,
+    .mdc-tab__content,
+    .mdc-tab__text-label,
+    button,
+    [part~="base"],
+    [part~="button"],
+    [part~="content"] {
+      width: 100% !important;
+      height: 48px !important;
+      min-height: 48px !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      border-radius: 24px !important;
+      background: transparent !important;
+      border: 0 !important;
+      box-shadow: none !important;
+      outline: 0 !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      box-sizing: border-box !important;
+    }
+
+    :host([active]) [part~="base"],
+    :host([aria-selected="true"]) [part~="base"],
+    :host([aria-current="page"]) [part~="base"],
+    :host([selected]) [part~="base"],
+    :host(.active) [part~="base"],
+    :host(.iron-selected) [part~="base"] {
+      width: ${activeSize} !important;
+      min-width: ${activeSize} !important;
+      max-width: ${activeSize} !important;
+      background: ${config.active_background} !important;
+    }
+
+    .mdc-tab__text-label,
+    .mdc-tab__content span,
+    .label,
+    [part~="label"] {
+      display: none !important;
+    }
+
+    ha-icon,
+    ha-svg-icon,
+    .ha-icon,
+    slot[name="icon"] {
+      --mdc-icon-size: ${iconSize};
+      width: ${iconSize} !important;
+      height: ${iconSize} !important;
+      min-width: ${iconSize} !important;
+      min-height: ${iconSize} !important;
+      margin: 0 !important;
+      color: inherit !important;
+      line-height: 1 !important;
+      transform: none !important;
+    }
+
+    .mdc-tab-indicator,
+    .mdc-tab-indicator--active,
+    .mdc-tab-indicator__content,
+    .mdc-tab-indicator__content--underline,
+    .mdc-tab-indicator__content--fade,
+    [class*="active-indicator"],
+    [class*="selection-indicator"],
+    .mdc-tab__ripple,
+    mwc-ripple,
+    md-ripple,
+    md-focus-ring,
+    [part~="active-indicator"],
+    [part~="activeIndicator"],
+    [part~="selection-indicator"],
+    [part~="indicator"],
+    [part~="ripple"],
+    [part~="focus-ring"] {
+      display: none !important;
+      opacity: 0 !important;
+      width: 0 !important;
+      height: 0 !important;
+      min-width: 0 !important;
+      min-height: 0 !important;
+      border: 0 !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      transform: scale(0) !important;
+    }
+
+    .mdc-tab__ripple::before,
+    .mdc-tab__ripple::after {
+      display: none !important;
+      opacity: 0 !important;
+      background: transparent !important;
+      box-shadow: none !important;
+    }
+  `;
+
+  if (!config.mobile_only) return css;
+
+  return `
+    @media (max-width: ${config.mobile_max_width}) {
+      ${css}
     }
   `;
 }
@@ -399,9 +570,14 @@ function buildCss(config) {
   `;
 }
 
-function installStyle(root, cssText) {
+function isTabShadowRoot(root) {
+  return root !== document && root.host && TAB_SHADOW_HOSTS.has(root.host.localName);
+}
+
+function installStyle(root, cssText, tabShadowCss) {
   const target = root === document ? document.head : root;
   if (!target || !target.querySelector) return;
+  const nextCssText = isTabShadowRoot(root) ? `${cssText}\n${tabShadowCss}` : cssText;
 
   let style = target.querySelector(`#${STYLE_ID}`);
   if (!style) {
@@ -410,8 +586,8 @@ function installStyle(root, cssText) {
     target.appendChild(style);
   }
 
-  if (style.textContent !== cssText) {
-    style.textContent = cssText;
+  if (style.textContent !== nextCssText) {
+    style.textContent = nextCssText;
   }
 }
 
@@ -424,8 +600,8 @@ function observeRoot(root) {
   state.observers.set(root, observer);
 }
 
-function walkRoots(root, cssText) {
-  installStyle(root, cssText);
+function walkRoots(root, cssText, tabShadowCss) {
+  installStyle(root, cssText, tabShadowCss);
   observeRoot(root);
 
   const start = root === document ? document.documentElement : root;
@@ -435,7 +611,7 @@ function walkRoots(root, cssText) {
   let node = walker.currentNode;
   while (node) {
     if (node.shadowRoot) {
-      walkRoots(node.shadowRoot, cssText);
+      walkRoots(node.shadowRoot, cssText, tabShadowCss);
     }
     node = walker.nextNode();
   }
@@ -443,7 +619,7 @@ function walkRoots(root, cssText) {
 
 function applyStyles() {
   state.applyTimer = 0;
-  walkRoots(document, buildCss(state.config));
+  walkRoots(document, buildCss(state.config), buildTabShadowCss(state.config));
 }
 
 function scheduleApply() {
