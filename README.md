@@ -1,10 +1,17 @@
 # HA Native Nav Position
 
+[![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
+[![GitHub Release](https://img.shields.io/github/v/release/Philiphall6/ha-native-nav-position)](https://github.com/Philiphall6/ha-native-nav-position/releases/latest)
+
 Lovelace/HACS plugin that moves the native Home Assistant dashboard navigation to the top or bottom of the screen, with a compact mobile dock and icon-only view tabs.
 
 ![Preview](images/preview.svg)
 
 ## HACS Installation
+
+Until this repository is accepted into the HACS default repository list, install it as a custom Dashboard repository.
+
+[![Open your Home Assistant instance and open this repository inside HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Philiphall6&repository=ha-native-nav-position&category=plugin)
 
 1. Open **HACS** in Home Assistant.
 2. Open the menu in the top-right corner and choose **Custom repositories**.
