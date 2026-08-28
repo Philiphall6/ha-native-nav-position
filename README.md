@@ -6,20 +6,21 @@ Petit plugin Lovelace/HACS pour placer la navigation native de Home Assistant en
 
 ## Installation HACS
 
-1. Dans HACS, ouvre le menu avec les trois points.
-2. Choisis **Depots personnalises**.
-3. Ajoute ce depot :
+1. Dans Home Assistant, ouvre **HACS**.
+2. Clique sur les trois points en haut a droite, puis **Depots personnalises**.
+3. Colle cette URL :
 
 ```text
 https://github.com/Philiphall6/ha-native-nav-position
 ```
 
-4. Type du depot : **Dashboard**.
-5. Installe le plugin.
-6. Verifie que la ressource Lovelace pointe vers :
+4. Choisis le type **Dashboard**.
+5. Clique sur **Ajouter**, puis installe **HA Native Nav Position**.
+6. Dans les ressources Lovelace, verifie que HACS a ajoute :
 
 ```yaml
-/hacsfiles/ha-native-nav-position/ha-native-nav-position.js
+url: /hacsfiles/ha-native-nav-position/ha-native-nav-position.js
+type: module
 ```
 
 HACS attend un plugin Dashboard avec un fichier `.js` dans `dist/` ou a la racine, et un fichier JS qui porte le meme nom que le depot.
