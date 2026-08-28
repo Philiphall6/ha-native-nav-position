@@ -2,6 +2,8 @@
 
 Petit plugin Lovelace/HACS pour placer la navigation native de Home Assistant en haut ou en bas, avec un style dock mobile et des onglets en icones.
 
+![Preview](images/preview.svg)
+
 ## Installation HACS
 
 1. Cree un depot GitHub public avec ces fichiers.
