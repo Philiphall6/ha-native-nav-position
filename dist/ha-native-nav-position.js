@@ -1,4 +1,4 @@
-const VERSION = "0.1.10";
+const VERSION = "0.1.11";
 const TAG_NAME = "ha-native-nav-position";
 const STYLE_ID = "ha-native-nav-position-style";
 const NAV_ATTR = "data-ha-native-nav-position-active";
@@ -36,7 +36,7 @@ const DEFAULT_CONFIG = {
   height: "64px",
   radius: "30px",
   side_gap: "12px",
-  bottom_padding: "108px",
+  bottom_padding: "128px",
   top_padding: "88px",
   background: "rgba(35, 48, 64, 0.54)",
   active_background: "transparent",
@@ -460,6 +460,7 @@ function buildHeaderCss(config) {
       height: ${config.height} !important;
       min-height: ${config.height} !important;
       border-radius: ${config.radius} !important;
+      box-sizing: border-box !important;
       overflow: hidden !important;
       background: ${config.background} !important;
       border: ${config.border} !important;
@@ -535,6 +536,7 @@ function buildHeaderCss(config) {
         top: calc(${config.offset} + env(safe-area-inset-top)) !important;
         bottom: auto !important;
         z-index: ${config.z_index} !important;
+        transform: translateZ(0) !important;
         ${dockCss}
       }
 
@@ -546,12 +548,18 @@ function buildHeaderCss(config) {
 
       ${sideButtonCss}
 
+      ha-panel-lovelace,
+      hui-root,
+      hui-view-container,
+      #view,
+      main,
       hui-view,
       hui-sections-view,
       hui-masonry-view,
       hui-panel-view {
         padding-top: calc(${config.top_padding} + env(safe-area-inset-top)) !important;
         padding-bottom: 0 !important;
+        scroll-padding-top: calc(${config.top_padding} + env(safe-area-inset-top)) !important;
       }
     `;
   }
@@ -562,6 +570,7 @@ function buildHeaderCss(config) {
       top: auto !important;
       bottom: calc(${config.offset} + env(safe-area-inset-bottom)) !important;
       z-index: ${config.z_index} !important;
+      transform: translateZ(0) !important;
       ${dockCss}
     }
 
@@ -573,11 +582,18 @@ function buildHeaderCss(config) {
 
     ${sideButtonCss}
 
+    ha-panel-lovelace,
+    hui-root,
+    hui-view-container,
+    #view,
+    main,
     hui-view,
     hui-sections-view,
     hui-masonry-view,
     hui-panel-view {
       padding-bottom: calc(${config.bottom_padding} + env(safe-area-inset-bottom)) !important;
+      scroll-padding-bottom: calc(${config.bottom_padding} + env(safe-area-inset-bottom)) !important;
+      box-sizing: border-box !important;
     }
   `;
 }
