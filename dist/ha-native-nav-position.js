@@ -1,4 +1,4 @@
-const VERSION = "0.1.5";
+const VERSION = "0.1.6";
 const TAG_NAME = "ha-native-nav-position";
 const STYLE_ID = "ha-native-nav-position-style";
 
@@ -102,11 +102,12 @@ function buildTabCss(config) {
 
   const tabWidth = config.compact ? "48px" : "56px";
   const iconSize = "24px";
-  const iconOffset = config.compact ? "12px" : "10px";
 
   return `
     ha-tab-group {
       --mdc-tab-height: 48px !important;
+      --mdc-tab-indicator-active-indicator-height: 0 !important;
+      --mdc-tab-indicator-active-indicator-color: transparent !important;
       min-width: 0 !important;
       width: 100% !important;
     }
@@ -115,6 +116,9 @@ function buildTabCss(config) {
     ha-tab-group-tab[class~="icon-only"] {
       --mdc-tab-min-width: ${tabWidth} !important;
       --mdc-tab-width: ${tabWidth} !important;
+      --mdc-tab-height: 48px !important;
+      --mdc-tab-indicator-active-indicator-height: 0 !important;
+      --mdc-tab-indicator-active-indicator-color: transparent !important;
       flex: 0 0 ${tabWidth} !important;
       width: ${tabWidth} !important;
       min-width: ${tabWidth} !important;
@@ -125,22 +129,36 @@ function buildTabCss(config) {
       overflow: hidden !important;
       color: ${config.inactive_color} !important;
       opacity: 0.82 !important;
+      background: transparent !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
     }
 
     ha-tab-group-tab[active],
     ha-tab-group-tab[aria-selected="true"] {
       color: ${config.active_color} !important;
       opacity: 1 !important;
-      background: ${config.active_background} !important;
+      background: transparent !important;
     }
 
     ha-tab-group-tab::part(base),
     ha-tab-group-tab[class~="icon-only"]::part(base) {
       width: ${tabWidth} !important;
       min-width: ${tabWidth} !important;
+      height: 48px !important;
       padding: 0 !important;
       border-radius: 24px !important;
+      background: transparent !important;
+      box-sizing: border-box !important;
+      display: flex !important;
+      align-items: center !important;
       justify-content: center !important;
+    }
+
+    ha-tab-group-tab[active]::part(base),
+    ha-tab-group-tab[aria-selected="true"]::part(base) {
+      background: ${config.active_background} !important;
     }
 
     ha-tab-group-tab .mdc-tab__text-label,
@@ -149,14 +167,43 @@ function buildTabCss(config) {
       display: none !important;
     }
 
+    ha-tab-group-tab .mdc-tab,
+    ha-tab-group-tab .mdc-tab__content,
+    ha-tab-group-tab [part~="content"] {
+      width: 100% !important;
+      height: 48px !important;
+      padding: 0 !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      box-sizing: border-box !important;
+    }
+
     ha-tab-group-tab ha-icon,
     ha-tab-group-tab[class~="icon-only"] ha-icon {
       --mdc-icon-size: ${iconSize};
       width: ${iconSize} !important;
       height: ${iconSize} !important;
-      margin: ${iconOffset} auto 0 !important;
+      min-width: ${iconSize} !important;
+      min-height: ${iconSize} !important;
+      margin: 0 !important;
       display: block !important;
       color: inherit !important;
+      line-height: 1 !important;
+      transform: none !important;
+    }
+
+    ha-tab-group-tab .mdc-tab-indicator,
+    ha-tab-group-tab .mdc-tab-indicator__content,
+    ha-tab-group-tab .mdc-tab__ripple,
+    ha-tab-group-tab mwc-ripple,
+    ha-tab-group-tab md-ripple,
+    ha-tab-group-tab::part(active-indicator),
+    ha-tab-group-tab::part(indicator) {
+      display: none !important;
+      opacity: 0 !important;
+      height: 0 !important;
+      border: 0 !important;
     }
   `;
 }
@@ -190,10 +237,31 @@ function buildHeaderCss(config) {
       min-height: ${config.height} !important;
       padding: 0 10px !important;
       background: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04)) !important;
+      align-items: center !important;
     `
     : `
       min-height: ${config.height} !important;
     `;
+
+  const sideButtonCss = `
+    .header ha-menu-button,
+    .header ha-icon-button,
+    .header app-toolbar > ha-menu-button,
+    .header app-toolbar > ha-icon-button {
+      --mdc-icon-button-size: 48px !important;
+      --mdc-icon-size: 24px !important;
+      flex: 0 0 48px !important;
+      width: 48px !important;
+      min-width: 48px !important;
+      height: 48px !important;
+      min-height: 48px !important;
+      margin: 0 !important;
+      border-radius: 24px !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+    }
+  `;
 
   if (config.position === "top") {
     return `
@@ -210,6 +278,8 @@ function buildHeaderCss(config) {
       .header ha-tab-group {
         ${toolbarCss}
       }
+
+      ${sideButtonCss}
 
       hui-view,
       #view,
@@ -234,6 +304,8 @@ function buildHeaderCss(config) {
     .header ha-tab-group {
       ${toolbarCss}
     }
+
+    ${sideButtonCss}
 
     hui-view,
     #view,
