@@ -34,6 +34,12 @@ url: /hacsfiles/ha-native-nav-position/ha-native-nav-position.js
 type: module
 ```
 
+## Principe De Configuration
+
+La navigation doit etre configuree depuis cette ressource HACS, pas depuis le theme Home Assistant.
+
+Garde ton theme sans bloc `card-mod-root` pour cette barre. Comme ca, les prochaines corrections de design arrivent simplement via HACS avec **Update information** puis **Redownload**.
+
 Pour forcer le bas :
 
 ```yaml
