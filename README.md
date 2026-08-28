@@ -1,53 +1,60 @@
 # HA Native Nav Position
 
-Petit plugin Lovelace/HACS pour placer la navigation native de Home Assistant en haut ou en bas, avec un style dock mobile et des onglets en icones.
+Lovelace/HACS plugin that moves the native Home Assistant dashboard navigation to the top or bottom of the screen, with a compact mobile dock and icon-only view tabs.
 
 ![Preview](images/preview.svg)
 
-## Installation HACS
+## HACS Installation
 
-1. Dans Home Assistant, ouvre **HACS**.
-2. Clique sur les trois points en haut a droite, puis **Depots personnalises**.
-3. Colle cette URL :
+1. Open **HACS** in Home Assistant.
+2. Open the menu in the top-right corner and choose **Custom repositories**.
+3. Add this repository URL:
 
 ```text
 https://github.com/Philiphall6/ha-native-nav-position
 ```
 
-4. Choisis le type **Dashboard**.
-5. Clique sur **Ajouter**, puis installe **HA Native Nav Position**.
-6. Dans les ressources Lovelace, verifie que HACS a ajoute :
+4. Set the repository type to **Dashboard**.
+5. Click **Add**, then install **HA Native Nav Position**.
+6. Make sure the Lovelace resource points to:
 
 ```yaml
 url: /hacsfiles/ha-native-nav-position/ha-native-nav-position.js
 type: module
 ```
 
-HACS attend un plugin Dashboard avec un fichier `.js` dans `dist/` ou a la racine, et un fichier JS qui porte le meme nom que le depot.
+HACS installs the published file from `dist/ha-native-nav-position.js`.
 
-## Configuration Simple
+## Updating From HACS
 
-Par defaut, le plugin met la barre en bas sur mobile :
+After a new version is published:
+
+1. Open **HA Native Nav Position** in HACS.
+2. Run **Update information**.
+3. Run **Redownload** or **Update** if HACS offers an update.
+4. Refresh the Home Assistant frontend. On mobile, fully close and reopen the app if the old version is still cached.
+
+## Basic Configuration
+
+By default, the plugin places the navigation bar at the bottom on mobile:
 
 ```yaml
 url: /hacsfiles/ha-native-nav-position/ha-native-nav-position.js
 type: module
 ```
 
-## Principe De Configuration
+Configure this navigation from the HACS resource, not from the Home Assistant theme. Keep your theme free of `card-mod-root` overrides for this bar so future design fixes can be delivered through HACS.
 
-La navigation doit etre configuree depuis cette ressource HACS, pas depuis le theme Home Assistant.
+## Position
 
-Garde ton theme sans bloc `card-mod-root` pour cette barre. Comme ca, les prochaines corrections de design arrivent simplement via HACS avec **Update information** puis **Redownload**.
-
-Pour forcer le bas :
+Force the bottom position:
 
 ```yaml
 url: /hacsfiles/ha-native-nav-position/ha-native-nav-position.js?position=bottom
 type: module
 ```
 
-Pour remettre en haut :
+Restore the top position:
 
 ```yaml
 url: /hacsfiles/ha-native-nav-position/ha-native-nav-position.js?position=top
@@ -56,47 +63,45 @@ type: module
 
 ## Options
 
-Les options peuvent etre passees dans l'URL de la ressource :
+Options can be passed through the resource URL:
 
 ```yaml
 url: /hacsfiles/ha-native-nav-position/ha-native-nav-position.js?position=bottom&dock=true&hide_labels=true&mobile_only=true
 type: module
 ```
 
-Options utiles :
-
-| Option | Defaut | Description |
+| Option | Default | Description |
 | --- | --- | --- |
-| `position` | `bottom` | `bottom` ou `top` |
-| `mobile_only` | `true` | Applique le style seulement sous `mobile_max_width` |
-| `mobile_max_width` | `768px` | Largeur max du mode mobile |
-| `dock` | `true` | Active le style dock flottant |
-| `hide_labels` | `true` | Cache les textes de navigation |
-| `compact` | `true` | Utilise une zone tactile 48px avec icone 24px, comme les boutons natifs Home Assistant |
-| `offset` | `18px` | Distance avec le bord haut ou bas |
-| `height` | `64px` | Hauteur de la barre |
-| `active_color` | `var(--accent-color, var(--primary-color))` | Couleur de l'icone de la vue active, reprise depuis le theme |
-| `inactive_color` | `rgba(255, 255, 255, 0.78)` | Couleur des icones inactives |
+| `position` | `bottom` | Navigation position: `bottom` or `top`. |
+| `mobile_only` | `true` | Applies the styling only below `mobile_max_width`. |
+| `mobile_max_width` | `768px` | Maximum width for mobile mode. |
+| `dock` | `true` | Enables the floating dock style. |
+| `hide_labels` | `true` | Hides navigation labels. |
+| `compact` | `true` | Uses a 48px touch target with a 24px icon, matching native Home Assistant buttons. |
+| `offset` | `18px` | Distance from the top or bottom edge. |
+| `height` | `64px` | Dock height. |
+| `active_color` | `var(--accent-color, var(--primary-color))` | Active view icon color, inherited from the current Home Assistant theme. |
+| `inactive_color` | `rgba(255, 255, 255, 0.78)` | Inactive view icon color. |
 
-## Icônes Des Vues
+## View Icons
 
-Pour avoir une barre composee uniquement de pictogrammes, chaque vue Lovelace doit avoir une icone :
+For an icon-only navigation bar, each Lovelace view must define an icon:
 
 ```yaml
 views:
   - title: Home
     path: home
     icon: mdi:home-variant
-  - title: Volets
-    path: volets
+  - title: Shutters
+    path: shutters
     icon: mdi:window-shutter
 ```
 
-Le plugin peut cacher les textes, mais il ne peut pas deviner automatiquement quelle icone correspond a chaque piece ou vue.
+The plugin can hide labels, but it cannot automatically guess which icon should represent each room or view.
 
-## Carte Invisible Optionnelle
+## Optional Invisible Card
 
-Si tu veux surcharger la config dans un tableau de bord, ajoute cette carte dans une vue :
+If you want to override the configuration from a dashboard view, add this card to one view:
 
 ```yaml
 type: custom:ha-native-nav-position
@@ -106,8 +111,8 @@ dock: true
 hide_labels: true
 ```
 
-La carte est invisible et ne prend pas de place. Pour un comportement parfaitement identique sur un chargement direct de n'importe quelle vue, prefere la configuration par URL de ressource.
+The card is invisible and takes no layout space. For consistent behavior when directly opening any view, prefer configuring the plugin through the Lovelace resource URL.
 
 ## Notes
 
-Ce plugin modifie l'interface native de Home Assistant cote navigateur. Si Home Assistant change fortement sa structure interne, une mise a jour du plugin peut etre necessaire.
+This plugin modifies the native Home Assistant frontend in the browser. If Home Assistant changes its internal navigation structure, a plugin update may be required.
