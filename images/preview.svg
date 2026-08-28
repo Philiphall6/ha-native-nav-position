@@ -1,49 +1,117 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="788" viewBox="0 0 1400 788" role="img" aria-labelledby="title desc">
   <title id="title">HA Native Nav Position preview</title>
-  <desc id="desc">A Home Assistant mobile dashboard preview with a floating bottom navigation dock.</desc>
+  <desc id="desc">Two Home Assistant dashboard mockups showing native navigation as a floating icon dock at the top or bottom.</desc>
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#69b7df"/>
-      <stop offset="0.5" stop-color="#7fcbb8"/>
-      <stop offset="1" stop-color="#1269d3"/>
+    <linearGradient id="page" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#172635"/>
+      <stop offset=".52" stop-color="#1f3d48"/>
+      <stop offset="1" stop-color="#0d2139"/>
     </linearGradient>
-    <filter id="blur" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="18"/>
+    <linearGradient id="screenA" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6bc2e8"/>
+      <stop offset=".52" stop-color="#9ad0b8"/>
+      <stop offset="1" stop-color="#106bd9"/>
+    </linearGradient>
+    <linearGradient id="screenB" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#75c8e6"/>
+      <stop offset=".5" stop-color="#74bfae"/>
+      <stop offset="1" stop-color="#2658ca"/>
+    </linearGradient>
+    <linearGradient id="dock" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#435a70" stop-opacity=".88"/>
+      <stop offset="1" stop-color="#26394f" stop-opacity=".9"/>
+    </linearGradient>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="22" stdDeviation="18" flood-color="#03101d" flood-opacity=".38"/>
     </filter>
+    <filter id="cardShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="13" flood-color="#0b2744" flood-opacity=".22"/>
+    </filter>
+    <symbol id="i-home" viewBox="0 0 24 24">
+      <path d="M3.5 11.2 12 4.5l8.5 6.7v8.3a1 1 0 0 1-1 1h-5.2v-5.8H9.7v5.8H4.5a1 1 0 0 1-1-1v-8.3Z" fill="currentColor"/>
+    </symbol>
+    <symbol id="i-shutter" viewBox="0 0 24 24">
+      <path d="M5 5.5h14v3H5v-3Zm1.5 4.7h11v2.2h-11v-2.2Zm0 3.8h11v2.2h-11V14Zm0 3.8h11V20h-11v-2.2Z" fill="currentColor"/>
+    </symbol>
+    <symbol id="i-thermo" viewBox="0 0 24 24">
+      <path d="M10 5a2 2 0 0 1 4 0v7.6a5 5 0 1 1-4 0V5Zm2 10.2a2.3 2.3 0 1 0 0 4.6 2.3 2.3 0 0 0 0-4.6Z" fill="currentColor"/>
+    </symbol>
+    <symbol id="i-light" viewBox="0 0 24 24">
+      <path d="M9 21h6v-2H9v2Zm3-19a6 6 0 0 0-3.7 10.7c.9.7 1.2 1.3 1.4 2.3h4.6c.2-1 .5-1.6 1.4-2.3A6 6 0 0 0 12 2Z" fill="currentColor"/>
+    </symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24">
+      <path d="M4 7.5h10.2a2 2 0 0 1 2 2v.9l3.8-2.2v7.6l-3.8-2.2v.9a2 2 0 0 1-2 2H4v-9Z" fill="currentColor"/>
+    </symbol>
+    <symbol id="i-more" viewBox="0 0 24 24">
+      <circle cx="12" cy="5" r="2.2" fill="currentColor"/>
+      <circle cx="12" cy="12" r="2.2" fill="currentColor"/>
+      <circle cx="12" cy="19" r="2.2" fill="currentColor"/>
+    </symbol>
   </defs>
-  <rect width="1200" height="675" fill="#162332"/>
-  <rect x="378" y="38" width="444" height="600" rx="48" fill="url(#bg)"/>
-  <path d="M820 226 514 558" stroke="#0873df" stroke-width="14" opacity=".75"/>
-  <rect x="378" y="38" width="444" height="600" rx="48" fill="rgba(255,255,255,.08)"/>
-  <text x="600" y="118" fill="#fff" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="700" text-anchor="middle">Bonjour PHILIPPE</text>
-  <text x="420" y="190" fill="#fff" font-family="Arial, Helvetica, sans-serif" font-size="24">Nouvelle section</text>
-  <g opacity=".62">
-    <rect x="420" y="212" width="190" height="92" rx="34" fill="#dbe6ec" filter="url(#blur)"/>
-    <rect x="630" y="212" width="150" height="70" rx="34" fill="#dbe6ec" filter="url(#blur)"/>
-    <rect x="420" y="336" width="160" height="90" rx="34" fill="#dbe6ec" filter="url(#blur)"/>
-    <rect x="602" y="336" width="178" height="90" rx="34" fill="#dbe6ec" filter="url(#blur)"/>
+
+  <rect width="1400" height="788" fill="url(#page)"/>
+  <circle cx="160" cy="118" r="170" fill="#2e89d7" opacity=".16"/>
+  <circle cx="1260" cy="660" r="220" fill="#65d6bf" opacity=".14"/>
+  <text x="700" y="84" fill="#f7fbff" font-family="Inter, Arial, Helvetica, sans-serif" font-size="52" font-weight="800" text-anchor="middle">HA Native Nav Position</text>
+  <text x="700" y="130" fill="#bcd1df" font-family="Inter, Arial, Helvetica, sans-serif" font-size="24" text-anchor="middle">Navigation native Home Assistant en haut ou en bas, avec dock mobile en icones</text>
+
+  <g transform="translate(190 174)" filter="url(#softShadow)">
+    <rect width="380" height="560" rx="46" fill="#0d1a27"/>
+    <rect x="14" y="14" width="352" height="532" rx="36" fill="url(#screenA)"/>
+    <path d="M366 190 105 505" stroke="#0876df" stroke-width="12" opacity=".78"/>
+    <rect x="14" y="14" width="352" height="532" rx="36" fill="#ffffff" opacity=".06"/>
+    <text x="40" y="86" fill="#ffffff" font-family="Inter, Arial, Helvetica, sans-serif" font-size="24" font-weight="700">Dashboard</text>
+    <text x="40" y="121" fill="#f0f7fb" font-family="Inter, Arial, Helvetica, sans-serif" font-size="17">position: top</text>
+
+    <g transform="translate(36 44)">
+      <rect width="308" height="64" rx="32" fill="url(#dock)" stroke="#ffffff" stroke-opacity=".18"/>
+      <g transform="translate(18 8)" color="#ffffff">
+        <rect width="48" height="48" rx="24" fill="#ffffff" opacity=".16"/>
+        <use href="#i-home" x="12" y="12" width="24" height="24"/>
+      </g>
+      <g transform="translate(75 8)" color="#cbd8e3"><use href="#i-shutter" x="12" y="12" width="24" height="24"/></g>
+      <g transform="translate(132 8)" color="#cbd8e3"><use href="#i-thermo" x="12" y="12" width="24" height="24"/></g>
+      <g transform="translate(189 8)" color="#cbd8e3"><use href="#i-light" x="12" y="12" width="24" height="24"/></g>
+      <g transform="translate(246 8)" color="#cbd8e3"><use href="#i-more" x="12" y="12" width="24" height="24"/></g>
+    </g>
+
+    <g transform="translate(38 168)" filter="url(#cardShadow)" opacity=".78">
+      <rect width="138" height="98" rx="28" fill="#d9e4ea" opacity=".62"/>
+      <rect x="168" width="138" height="98" rx="28" fill="#d9e4ea" opacity=".62"/>
+      <rect y="124" width="138" height="98" rx="28" fill="#d9e4ea" opacity=".62"/>
+      <rect x="168" y="124" width="138" height="98" rx="28" fill="#d9e4ea" opacity=".62"/>
+      <rect y="248" width="138" height="98" rx="28" fill="#d9e4ea" opacity=".62"/>
+      <rect x="168" y="248" width="138" height="98" rx="28" fill="#d9e4ea" opacity=".62"/>
+    </g>
   </g>
-  <g transform="translate(414 542)">
-    <rect width="372" height="66" rx="33" fill="rgba(35,48,64,.62)" stroke="rgba(255,255,255,.22)"/>
-    <circle cx="42" cy="33" r="21" fill="rgba(255,255,255,.15)"/>
-    <path d="M32 37h20v-17h-20v17Zm-5-18 15-12 15 12" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-    <g transform="translate(108 18)" stroke="#fff" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity=".85">
-      <rect x="2" y="2" width="28" height="24" rx="4"/>
-      <path d="M9 2v24"/>
+
+  <g transform="translate(830 174)" filter="url(#softShadow)">
+    <rect width="380" height="560" rx="46" fill="#0d1a27"/>
+    <rect x="14" y="14" width="352" height="532" rx="36" fill="url(#screenB)"/>
+    <path d="M366 292 80 545" stroke="#0876df" stroke-width="12" opacity=".78"/>
+    <rect x="14" y="14" width="352" height="532" rx="36" fill="#ffffff" opacity=".06"/>
+    <text x="40" y="80" fill="#ffffff" font-family="Inter, Arial, Helvetica, sans-serif" font-size="24" font-weight="700">Dashboard</text>
+    <text x="40" y="115" fill="#f0f7fb" font-family="Inter, Arial, Helvetica, sans-serif" font-size="17">position: bottom</text>
+
+    <g transform="translate(38 132)" filter="url(#cardShadow)" opacity=".78">
+      <rect width="138" height="98" rx="28" fill="#d9e4ea" opacity=".62"/>
+      <rect x="168" width="138" height="98" rx="28" fill="#d9e4ea" opacity=".62"/>
+      <rect y="124" width="138" height="98" rx="28" fill="#d9e4ea" opacity=".62"/>
+      <rect x="168" y="124" width="138" height="98" rx="28" fill="#d9e4ea" opacity=".62"/>
+      <rect y="248" width="138" height="98" rx="28" fill="#d9e4ea" opacity=".62"/>
+      <rect x="168" y="248" width="138" height="98" rx="28" fill="#d9e4ea" opacity=".62"/>
     </g>
-    <g transform="translate(178 18)" stroke="#fff" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity=".85">
-      <path d="M15 3v28M5 18h20"/>
-      <path d="m20 8 8 8-8 8"/>
-    </g>
-    <g transform="translate(248 18)" stroke="#fff" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity=".85">
-      <circle cx="16" cy="16" r="9"/>
-      <path d="M16 2v5M16 25v5M2 16h5M25 16h5"/>
-    </g>
-    <g transform="translate(318 18)" fill="#fff" opacity=".85">
-      <circle cx="14" cy="5" r="4"/>
-      <circle cx="14" cy="16" r="4"/>
-      <circle cx="14" cy="27" r="4"/>
+
+    <g transform="translate(36 458)">
+      <rect width="308" height="64" rx="32" fill="url(#dock)" stroke="#ffffff" stroke-opacity=".18"/>
+      <g transform="translate(18 8)" color="#ffffff">
+        <rect width="48" height="48" rx="24" fill="#ffffff" opacity=".16"/>
+        <use href="#i-home" x="12" y="12" width="24" height="24"/>
+      </g>
+      <g transform="translate(75 8)" color="#cbd8e3"><use href="#i-shutter" x="12" y="12" width="24" height="24"/></g>
+      <g transform="translate(132 8)" color="#cbd8e3"><use href="#i-thermo" x="12" y="12" width="24" height="24"/></g>
+      <g transform="translate(189 8)" color="#cbd8e3"><use href="#i-light" x="12" y="12" width="24" height="24"/></g>
+      <g transform="translate(246 8)" color="#cbd8e3"><use href="#i-more" x="12" y="12" width="24" height="24"/></g>
     </g>
   </g>
-  <text x="600" y="655" fill="#cdd7df" font-family="Arial, Helvetica, sans-serif" font-size="22" text-anchor="middle">Top or bottom native Home Assistant navigation for HACS</text>
 </svg>
