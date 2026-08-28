@@ -75,6 +75,8 @@ Options utiles :
 | `compact` | `true` | Utilise une zone tactile 48px avec icone 24px, comme les boutons natifs Home Assistant |
 | `offset` | `18px` | Distance avec le bord haut ou bas |
 | `height` | `64px` | Hauteur de la barre |
+| `active_color` | `var(--accent-color, var(--primary-color))` | Couleur de l'icone de la vue active, reprise depuis le theme |
+| `inactive_color` | `rgba(255, 255, 255, 0.78)` | Couleur des icones inactives |
 
 ## Icônes Des Vues
 

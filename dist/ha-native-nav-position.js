@@ -1,23 +1,29 @@
-const VERSION = "0.1.13";
+const VERSION = "0.1.25";
 const TAG_NAME = "ha-native-nav-position";
 const STYLE_ID = "ha-native-nav-position-style";
 const NAV_ATTR = "data-ha-native-nav-position-active";
-const SPACER_ATTR = "data-ha-native-nav-position-spacer";
 const CONTROL_SIZE_VAR = "--ha-native-nav-control-size";
 const ICON_SIZE_VAR = "--ha-native-nav-icon-size";
+const TAB_Y_OFFSET_VAR = "--ha-native-nav-tab-y-offset";
 const TAB_SHADOW_HOSTS = new Set([
   "ha-tab-group-tab",
   "mwc-tab",
   "md-primary-tab",
   "md-secondary-tab"
 ]);
-const VIEW_SHADOW_HOSTS = new Set([
-  "hui-view",
-  "hui-view-container",
-  "hui-sections-view",
-  "hui-masonry-view",
-  "hui-panel-view",
-  "hui-sidebar-view"
+const TAB_GROUP_SHADOW_HOSTS = new Set([
+  "ha-tab-group",
+  "ha-tabs",
+  "paper-tabs",
+  "mwc-tab-bar"
+]);
+const BUTTON_SHADOW_HOSTS = new Set([
+  "ha-menu-button",
+  "ha-icon-button",
+  "ha-button",
+  "mwc-icon-button",
+  "md-icon-button",
+  "wa-button"
 ]);
 const NON_DASHBOARD_PREFIXES = [
   "/config",
@@ -47,14 +53,15 @@ const DEFAULT_CONFIG = {
   height: "64px",
   radius: "30px",
   side_gap: "12px",
+  tab_y_offset: "13px",
   bottom_padding: "128px",
   top_padding: "88px",
   background: "rgba(35, 48, 64, 0.54)",
   active_background: "transparent",
-  active_color: "var(--primary-text-color)",
+  active_color: "var(--accent-color, var(--primary-color))",
   inactive_color: "rgba(255, 255, 255, 0.78)",
-  border: "1px solid rgba(255, 255, 255, 0.18)",
-  shadow: "0 18px 44px rgba(0, 0, 0, 0.24)",
+  border: "0 solid transparent",
+  shadow: "none",
   z_index: 1000
 };
 
@@ -117,6 +124,7 @@ function normalizeConfig(input = {}) {
   normalized.height = toCssSize(merged.height, DEFAULT_CONFIG.height);
   normalized.radius = toCssSize(merged.radius, DEFAULT_CONFIG.radius);
   normalized.side_gap = toCssSize(merged.side_gap ?? merged.sideGap, DEFAULT_CONFIG.side_gap);
+  normalized.tab_y_offset = toCssSize(merged.tab_y_offset ?? merged.tabYOffset, DEFAULT_CONFIG.tab_y_offset);
   normalized.bottom_padding = toCssSize(merged.bottom_padding ?? merged.bottomPadding, DEFAULT_CONFIG.bottom_padding);
   normalized.top_padding = toCssSize(merged.top_padding ?? merged.topPadding, DEFAULT_CONFIG.top_padding);
   normalized.background = safeText(merged.background, DEFAULT_CONFIG.background);
@@ -136,6 +144,7 @@ function buildTabCss(config) {
   const tabWidth = config.compact ? "48px" : "56px";
   const controlSize = `var(${CONTROL_SIZE_VAR}, ${tabWidth})`;
   const iconSize = `var(${ICON_SIZE_VAR}, 24px)`;
+  const tabYOffset = `var(${TAB_Y_OFFSET_VAR}, ${config.tab_y_offset})`;
   const controlRadius = `calc(${controlSize} / 2)`;
   const headerSelector = `.header[${NAV_ATTR}]`;
 
@@ -149,6 +158,20 @@ function buildTabCss(config) {
       --md-primary-tab-active-indicator-color: transparent !important;
       min-width: 0 !important;
       width: 100% !important;
+      position: relative !important;
+      top: ${tabYOffset} !important;
+      transform: none !important;
+      translate: 0 0 !important;
+      overflow-x: auto !important;
+      overflow-y: hidden !important;
+      touch-action: pan-x !important;
+      scrollbar-width: none !important;
+    }
+
+    ${headerSelector} ha-tab-group::-webkit-scrollbar {
+      display: none !important;
+      width: 0 !important;
+      height: 0 !important;
     }
 
     ${headerSelector} ha-tab-group-tab,
@@ -174,17 +197,34 @@ function buildTabCss(config) {
       min-width: ${controlSize} !important;
       max-width: ${controlSize} !important;
       height: ${controlSize} !important;
+      min-height: ${controlSize} !important;
+      max-height: ${controlSize} !important;
       margin: 0 1px !important;
+      border: 0 !important;
+      border-top: 0 !important;
+      border-right: 0 !important;
+      border-bottom: 0 !important;
+      border-left: 0 !important;
+      border-block: 0 !important;
+      border-inline: 0 !important;
+      border-color: transparent !important;
       border-radius: ${controlRadius} !important;
-      overflow: visible !important;
+      overflow: hidden !important;
+      position: relative !important;
+      inset: auto !important;
       color: ${config.inactive_color} !important;
       opacity: 0.82 !important;
       background: transparent !important;
       box-shadow: none !important;
       outline: 0 !important;
+      transform: none !important;
+      translate: 0 0 !important;
+      transition: color 140ms ease, opacity 140ms ease !important;
+      touch-action: pan-x !important;
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
+      box-sizing: border-box !important;
     }
 
     ${headerSelector} ha-tab-group-tab[active],
@@ -196,6 +236,14 @@ function buildTabCss(config) {
       color: ${config.active_color} !important;
       opacity: 1 !important;
       background: transparent !important;
+      border: 0 !important;
+      border-top: 0 !important;
+      border-right: 0 !important;
+      border-bottom: 0 !important;
+      border-left: 0 !important;
+      border-block: 0 !important;
+      border-inline: 0 !important;
+      border-color: transparent !important;
       box-shadow: none !important;
       outline: 0 !important;
     }
@@ -211,9 +259,20 @@ function buildTabCss(config) {
       padding: 0 !important;
       border-radius: 50% !important;
       background: transparent !important;
+      background-image: none !important;
       border: 0 !important;
+      border-top: 0 !important;
+      border-right: 0 !important;
+      border-bottom: 0 !important;
+      border-left: 0 !important;
+      border-block: 0 !important;
+      border-inline: 0 !important;
+      border-color: transparent !important;
       box-shadow: none !important;
       outline: 0 !important;
+      filter: none !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
       box-sizing: border-box !important;
       display: flex !important;
       align-items: center !important;
@@ -227,6 +286,16 @@ function buildTabCss(config) {
     ${headerSelector} ha-tab-group-tab.active::part(base),
     ${headerSelector} ha-tab-group-tab.iron-selected::part(base) {
       background: ${config.active_background} !important;
+      border: 0 !important;
+      border-top: 0 !important;
+      border-right: 0 !important;
+      border-bottom: 0 !important;
+      border-left: 0 !important;
+      border-block: 0 !important;
+      border-inline: 0 !important;
+      border-color: transparent !important;
+      box-shadow: none !important;
+      outline: 0 !important;
     }
 
     ${headerSelector} ha-tab-group-tab .mdc-tab__text-label,
@@ -249,6 +318,14 @@ function buildTabCss(config) {
       background: transparent !important;
       box-shadow: none !important;
       outline: 0 !important;
+      border: 0 !important;
+      border-top: 0 !important;
+      border-right: 0 !important;
+      border-bottom: 0 !important;
+      border-left: 0 !important;
+      border-block: 0 !important;
+      border-inline: 0 !important;
+      border-color: transparent !important;
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
@@ -256,7 +333,11 @@ function buildTabCss(config) {
     }
 
     ${headerSelector} ha-tab-group-tab ha-icon,
-    ${headerSelector} ha-tab-group-tab[class~="icon-only"] ha-icon {
+    ${headerSelector} ha-tab-group-tab[class~="icon-only"] ha-icon,
+    ${headerSelector} ha-tab-group-tab ha-svg-icon,
+    ${headerSelector} ha-tab-group-tab[class~="icon-only"] ha-svg-icon,
+    ${headerSelector} ha-tab-group-tab svg,
+    ${headerSelector} ha-tab-group-tab[class~="icon-only"] svg {
       --mdc-icon-size: ${iconSize};
       width: ${iconSize} !important;
       height: ${iconSize} !important;
@@ -267,6 +348,31 @@ function buildTabCss(config) {
       color: inherit !important;
       line-height: 1 !important;
       transform: none !important;
+      translate: 0 0 !important;
+      transition: color 140ms ease, opacity 140ms ease !important;
+      pointer-events: none !important;
+    }
+
+    ${headerSelector} ha-tab-group-tab[active] ha-icon,
+    ${headerSelector} ha-tab-group-tab[aria-selected="true"] ha-icon,
+    ${headerSelector} ha-tab-group-tab[aria-current="page"] ha-icon,
+    ${headerSelector} ha-tab-group-tab[selected] ha-icon,
+    ${headerSelector} ha-tab-group-tab.active ha-icon,
+    ${headerSelector} ha-tab-group-tab.iron-selected ha-icon,
+    ${headerSelector} ha-tab-group-tab[active] ha-svg-icon,
+    ${headerSelector} ha-tab-group-tab[aria-selected="true"] ha-svg-icon,
+    ${headerSelector} ha-tab-group-tab[aria-current="page"] ha-svg-icon,
+    ${headerSelector} ha-tab-group-tab[selected] ha-svg-icon,
+    ${headerSelector} ha-tab-group-tab.active ha-svg-icon,
+    ${headerSelector} ha-tab-group-tab.iron-selected ha-svg-icon,
+    ${headerSelector} ha-tab-group-tab[active] svg,
+    ${headerSelector} ha-tab-group-tab[aria-selected="true"] svg,
+    ${headerSelector} ha-tab-group-tab[aria-current="page"] svg,
+    ${headerSelector} ha-tab-group-tab[selected] svg,
+    ${headerSelector} ha-tab-group-tab.active svg,
+    ${headerSelector} ha-tab-group-tab.iron-selected svg {
+      color: ${config.active_color} !important;
+      fill: currentColor !important;
     }
 
     ${headerSelector} ha-tab-group-tab .mdc-tab-indicator,
@@ -320,6 +426,10 @@ function buildTabShadowCss(config) {
       --mdc-tab-min-width: ${controlSize} !important;
       --mdc-tab-width: ${controlSize} !important;
       --mdc-tab-height: ${controlSize} !important;
+      --indicator-color: transparent !important;
+      --indicator-height: 0 !important;
+      --active-tab-indicator-color: transparent !important;
+      --active-tab-indicator-height: 0 !important;
       --mdc-tab-indicator-active-indicator-height: 0 !important;
       --mdc-tab-indicator-active-indicator-color: transparent !important;
       --md-primary-tab-container-height: ${controlSize} !important;
@@ -336,8 +446,21 @@ function buildTabShadowCss(config) {
       height: ${controlSize} !important;
       border-radius: ${controlRadius} !important;
       background: transparent !important;
+      border: 0 !important;
+      border-top: 0 !important;
+      border-right: 0 !important;
+      border-bottom: 0 !important;
+      border-left: 0 !important;
+      border-block: 0 !important;
+      border-inline: 0 !important;
+      border-bottom-width: 0 !important;
+      border-bottom-color: transparent !important;
+      border-color: transparent !important;
       box-shadow: none !important;
       outline: 0 !important;
+      transform: none !important;
+      translate: 0 0 !important;
+      transition: color 140ms ease, opacity 140ms ease !important;
     }
 
     :host([active]),
@@ -349,8 +472,53 @@ function buildTabShadowCss(config) {
       color: ${config.active_color} !important;
       opacity: 1 !important;
       background: transparent !important;
+      border: 0 !important;
+      border-top: 0 !important;
+      border-right: 0 !important;
+      border-bottom: 0 !important;
+      border-left: 0 !important;
+      border-block: 0 !important;
+      border-inline: 0 !important;
+      border-bottom-width: 0 !important;
+      border-bottom-color: transparent !important;
+      border-color: transparent !important;
       box-shadow: none !important;
       outline: 0 !important;
+    }
+
+    .tab,
+    .tab-active {
+      width: 100% !important;
+      height: ${controlSize} !important;
+      min-height: ${controlSize} !important;
+      max-height: ${controlSize} !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      border-radius: 0 !important;
+      background: transparent !important;
+      background-image: none !important;
+      border: 0 !important;
+      border-top: 0 !important;
+      border-right: 0 !important;
+      border-bottom: 0 !important;
+      border-left: 0 !important;
+      border-block: 0 !important;
+      border-inline: 0 !important;
+      border-bottom-width: 0 !important;
+      border-bottom-color: transparent !important;
+      border-color: transparent !important;
+      box-shadow: none !important;
+      outline: 0 !important;
+      filter: none !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      box-sizing: border-box !important;
+      transform: none !important;
+      translate: 0 0 !important;
+      transition: color 140ms ease, opacity 140ms ease !important;
     }
 
     :host::before,
@@ -372,6 +540,15 @@ function buildTabShadowCss(config) {
       border-radius: ${controlRadius} !important;
       background: transparent !important;
       border: 0 !important;
+      border-top: 0 !important;
+      border-right: 0 !important;
+      border-bottom: 0 !important;
+      border-left: 0 !important;
+      border-block: 0 !important;
+      border-inline: 0 !important;
+      border-bottom-width: 0 !important;
+      border-bottom-color: transparent !important;
+      border-color: transparent !important;
       box-shadow: none !important;
       outline: 0 !important;
       display: flex !important;
@@ -405,7 +582,6 @@ function buildTabShadowCss(config) {
     ha-icon,
     ha-svg-icon,
     .ha-icon,
-    slot,
     slot[name="icon"] {
       --mdc-icon-size: ${iconSize};
       width: ${iconSize} !important;
@@ -416,24 +592,8 @@ function buildTabShadowCss(config) {
       color: inherit !important;
       line-height: 1 !important;
       transform: none !important;
-    }
-
-    ::slotted(ha-icon),
-    ::slotted(ha-svg-icon),
-    ::slotted(mwc-icon),
-    ::slotted(md-icon),
-    ::slotted(iron-icon),
-    ::slotted(svg),
-    ::slotted(*) {
-      --mdc-icon-size: ${iconSize};
-      width: ${iconSize} !important;
-      height: ${iconSize} !important;
-      min-width: ${iconSize} !important;
-      min-height: ${iconSize} !important;
-      margin: 0 !important;
-      line-height: 1 !important;
-      transform: none !important;
-      box-sizing: border-box !important;
+      translate: 0 0 !important;
+      pointer-events: none !important;
     }
 
     .mdc-tab-indicator,
@@ -483,71 +643,254 @@ function buildTabShadowCss(config) {
   `;
 }
 
-function buildViewShadowCss(config) {
-  if (!config.enabled) return "";
+function buildTabGroupShadowCss(config) {
+  if (!config.enabled || !config.hide_labels) return "";
 
-  const bottomSpace = `calc(${config.bottom_padding} + env(safe-area-inset-bottom))`;
-  const topSpace = `calc(${config.top_padding} + env(safe-area-inset-top))`;
-  const blockStart = config.position === "top" ? topSpace : "0px";
-  const blockEnd = config.position === "bottom" ? bottomSpace : "0px";
+  const tabWidth = config.compact ? "48px" : "56px";
+  const controlSize = `var(${CONTROL_SIZE_VAR}, ${tabWidth})`;
   const css = `
     :host {
+      --indicator-color: transparent !important;
+      --indicator-height: 0 !important;
+      --active-tab-indicator-color: transparent !important;
+      --active-tab-indicator-height: 0 !important;
+      --mdc-tab-indicator-active-indicator-height: 0 !important;
+      --mdc-tab-indicator-active-indicator-color: transparent !important;
+      --md-primary-tab-active-indicator-height: 0 !important;
+      --md-primary-tab-active-indicator-color: transparent !important;
+      min-width: 0 !important;
+      width: 100% !important;
+      overflow-x: auto !important;
+      overflow-y: hidden !important;
+      touch-action: pan-x !important;
+      border: 0 !important;
+      border-top: 0 !important;
+      border-right: 0 !important;
+      border-bottom: 0 !important;
+      border-left: 0 !important;
+      border-block: 0 !important;
+      border-inline: 0 !important;
+      border-bottom-width: 0 !important;
+      border-bottom-color: transparent !important;
+      border-color: transparent !important;
+      box-shadow: none !important;
+      outline: 0 !important;
+      transform: none !important;
+      translate: 0 0 !important;
+      scrollbar-width: none !important;
+    }
+
+    :host::-webkit-scrollbar,
+    .tabs::-webkit-scrollbar,
+    [part~="tabs"]::-webkit-scrollbar {
+      display: none !important;
+      width: 0 !important;
+      height: 0 !important;
+    }
+
+    .tab-group,
+    .tab-group-top,
+    .tab-group-bottom,
+    .nav-container,
+    .nav,
+    .tabs,
+    [part~="base"],
+    [part~="nav"],
+    [part~="tabs"] {
+      height: ${controlSize} !important;
+      min-height: ${controlSize} !important;
+      max-height: ${controlSize} !important;
+      overflow-x: auto !important;
+      overflow-y: hidden !important;
+      touch-action: pan-x !important;
+      background: transparent !important;
+      background-image: none !important;
+      border: 0 !important;
+      border-top: 0 !important;
+      border-right: 0 !important;
+      border-bottom: 0 !important;
+      border-left: 0 !important;
+      border-block: 0 !important;
+      border-inline: 0 !important;
+      border-bottom-width: 0 !important;
+      border-bottom-color: transparent !important;
+      border-color: transparent !important;
+      box-shadow: none !important;
+      outline: 0 !important;
+      transform: none !important;
+      translate: 0 0 !important;
       box-sizing: border-box !important;
-      scroll-padding-top: ${blockStart} !important;
-      scroll-padding-bottom: ${blockEnd} !important;
+      scrollbar-width: none !important;
     }
 
-    #view,
-    #root,
-    #columns,
-    main,
-    .view,
-    .root,
-    .columns,
-    .column,
-    .masonry,
-    .sections,
-    .container,
-    .content,
-    .cards {
-      box-sizing: border-box !important;
-      scroll-padding-top: ${blockStart} !important;
-      scroll-padding-bottom: ${blockEnd} !important;
-    }
-
-    #view,
-    #root,
-    #columns,
-    main,
-    .view,
-    .root,
-    .columns,
-    .masonry,
-    .sections,
-    .container,
-    .content,
-    .cards {
-      padding-bottom: ${blockEnd} !important;
-    }
-
-    #view::after,
-    #root::after,
-    #columns::after,
-    main::after,
-    .view::after,
-    .root::after,
-    .columns::after,
-    .masonry::after,
-    .sections::after,
-    .container::after,
-    .content::after,
-    .cards::after {
-      content: "" !important;
-      display: block !important;
-      height: ${blockEnd} !important;
-      min-height: ${blockEnd} !important;
-      flex: 0 0 ${blockEnd} !important;
+    :host::before,
+    :host::after,
+    .tab-group::before,
+    .tab-group::after,
+    .tab-group-top::before,
+    .tab-group-top::after,
+    .tab-group-bottom::before,
+    .tab-group-bottom::after,
+    .nav-container::before,
+    .nav-container::after,
+    .tabs::before,
+    .tabs::after,
+    [part~="base"]::before,
+    [part~="base"]::after,
+    [part~="tabs"]::before,
+    [part~="tabs"]::after {
+      display: none !important;
+      opacity: 0 !important;
+      visibility: hidden !important;
+      width: 0 !important;
+      height: 0 !important;
+      border: 0 !important;
+      background: transparent !important;
+      box-shadow: none !important;
       pointer-events: none !important;
+    }
+
+    .mdc-tab-indicator,
+    .mdc-tab-indicator--active,
+    .mdc-tab-indicator__content,
+    .mdc-tab-indicator__content--underline,
+    .mdc-tab-indicator__content--fade,
+    [part~="active-indicator"],
+    [part~="activeIndicator"],
+    [part~="selection-indicator"],
+    [part~="indicator"],
+    [class*="active-indicator"],
+    [class*="selection-indicator"],
+    [class*="indicator"] {
+      display: none !important;
+      opacity: 0 !important;
+      visibility: hidden !important;
+      width: 0 !important;
+      height: 0 !important;
+      min-width: 0 !important;
+      min-height: 0 !important;
+      border: 0 !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      pointer-events: none !important;
+      transform: scale(0) !important;
+    }
+
+    .scroll-button,
+    .scroll-button-start,
+    .scroll-button-end,
+    wa-button.scroll-button,
+    [part~="scroll-button"],
+    [class*="scroll-button"] {
+      display: none !important;
+      opacity: 0 !important;
+      visibility: hidden !important;
+      width: 0 !important;
+      min-width: 0 !important;
+      max-width: 0 !important;
+      height: 0 !important;
+      min-height: 0 !important;
+      max-height: 0 !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      border: 0 !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      pointer-events: none !important;
+      transform: none !important;
+      translate: 0 0 !important;
+    }
+  `;
+
+  if (!config.mobile_only) return css;
+
+  return `
+    @media (max-width: ${config.mobile_max_width}) {
+      ${css}
+    }
+  `;
+}
+
+function buildButtonShadowCss(config) {
+  if (!config.enabled || !config.hide_labels) return "";
+
+  const controlSize = `var(${CONTROL_SIZE_VAR}, 48px)`;
+  const iconSize = `var(${ICON_SIZE_VAR}, 24px)`;
+  const css = `
+    :host,
+    ha-button,
+    button,
+    [part~="base"],
+    [part~="button"] {
+      --mdc-icon-button-size: ${controlSize} !important;
+      --mdc-icon-size: ${iconSize} !important;
+      width: ${controlSize} !important;
+      min-width: ${controlSize} !important;
+      max-width: ${controlSize} !important;
+      height: ${controlSize} !important;
+      min-height: ${controlSize} !important;
+      max-height: ${controlSize} !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      background: transparent !important;
+      background-image: none !important;
+      border: 0 !important;
+      box-shadow: none !important;
+      outline: 0 !important;
+      filter: none !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      transform: none !important;
+      translate: 0 0 !important;
+      box-sizing: border-box !important;
+    }
+
+    :host::before,
+    :host::after,
+    ha-button::before,
+    ha-button::after,
+    button::before,
+    button::after,
+    [part~="base"]::before,
+    [part~="base"]::after,
+    [part~="button"]::before,
+    [part~="button"]::after,
+    [part~="ripple"],
+    ha-ripple,
+    mwc-ripple,
+    md-ripple,
+    md-focus-ring {
+      display: none !important;
+      opacity: 0 !important;
+      visibility: hidden !important;
+      width: 0 !important;
+      height: 0 !important;
+      background: transparent !important;
+      background-image: none !important;
+      border: 0 !important;
+      box-shadow: none !important;
+      outline: 0 !important;
+      pointer-events: none !important;
+      transform: none !important;
+      translate: 0 0 !important;
+    }
+
+    ha-icon,
+    ha-svg-icon,
+    svg,
+    .ha-icon,
+    .mdc-icon-button__icon,
+    [part~="label"] {
+      --mdc-icon-size: ${iconSize} !important;
+      width: ${iconSize} !important;
+      height: ${iconSize} !important;
+      min-width: ${iconSize} !important;
+      min-height: ${iconSize} !important;
+      margin: 0 !important;
+      color: inherit !important;
+      line-height: 1 !important;
+      transform: none !important;
+      translate: 0 0 !important;
     }
   `;
 
@@ -577,6 +920,8 @@ function buildHeaderCss(config) {
       overflow: hidden !important;
       background: ${config.background} !important;
       border: ${config.border} !important;
+      border-bottom: 0 !important;
+      outline: 0 !important;
       box-shadow: ${config.shadow} !important;
       backdrop-filter: blur(22px) saturate(1.45) !important;
       -webkit-backdrop-filter: blur(22px) saturate(1.45) !important;
@@ -604,6 +949,37 @@ function buildHeaderCss(config) {
     `;
 
   const sideButtonCss = `
+    ${headerSelector} .toolbar {
+      background: transparent !important;
+      border: 0 !important;
+      border-top: 0 !important;
+      border-right: 0 !important;
+      border-bottom: 0 !important;
+      border-left: 0 !important;
+      border-block: 0 !important;
+      border-inline: 0 !important;
+      box-shadow: none !important;
+      outline: 0 !important;
+    }
+
+    ${headerSelector}::before,
+    ${headerSelector}::after,
+    ${headerSelector} .toolbar::before,
+    ${headerSelector} .toolbar::after,
+    ${headerSelector} app-toolbar::before,
+    ${headerSelector} app-toolbar::after,
+    ${headerSelector} ha-tabs::before,
+    ${headerSelector} ha-tabs::after,
+    ${headerSelector} ha-tab-group::before,
+    ${headerSelector} ha-tab-group::after {
+      display: none !important;
+      opacity: 0 !important;
+      background: transparent !important;
+      border: 0 !important;
+      box-shadow: none !important;
+      outline: 0 !important;
+    }
+
     ${headerSelector} ha-menu-button,
     ${headerSelector} ha-icon-button,
     ${headerSelector} app-toolbar > ha-menu-button,
@@ -731,12 +1107,8 @@ function buildCss(config) {
   `;
 }
 
-function isTabShadowRoot(root) {
-  return root !== document && root.host && TAB_SHADOW_HOSTS.has(root.host.localName);
-}
-
-function isViewShadowRoot(root) {
-  return root !== document && root.host && VIEW_SHADOW_HOSTS.has(root.host.localName);
+function isShadowRootFor(root, hosts) {
+  return root !== document && root.host && hosts.has(root.host.localName);
 }
 
 function rootQuerySelectorAll(root, selector) {
@@ -765,6 +1137,29 @@ function findButtonIcon(button) {
   return findFirstElement(button.shadowRoot, selector) || findFirstElement(button, selector);
 }
 
+function closestComposed(element, selector) {
+  let node = element;
+  while (node) {
+    if (node.nodeType === Node.ELEMENT_NODE && node.matches?.(selector)) return node;
+    if (node.assignedSlot) {
+      node = node.assignedSlot;
+      continue;
+    }
+    if (node.nodeType === Node.DOCUMENT_FRAGMENT_NODE && node.host) {
+      node = node.host;
+      continue;
+    }
+    const parent = node.parentNode;
+    if (parent) {
+      node = parent;
+      continue;
+    }
+    const root = node.getRootNode?.();
+    node = root?.host && root.host !== node ? root.host : null;
+  }
+  return null;
+}
+
 function syncHeaderMetrics(header) {
   const button = header.querySelector(
     "ha-menu-button, app-toolbar > ha-menu-button, ha-icon-button[slot='navigationIcon'], app-toolbar > ha-icon-button"
@@ -777,93 +1172,13 @@ function syncHeaderMetrics(header) {
 
   header.style.setProperty(CONTROL_SIZE_VAR, `${controlSize}px`);
   header.style.setProperty(ICON_SIZE_VAR, `${iconSize}px`);
+  header.style.setProperty(TAB_Y_OFFSET_VAR, state.config.tab_y_offset);
 }
 
 function clearHeaderMetrics(header) {
   header.style.removeProperty(CONTROL_SIZE_VAR);
   header.style.removeProperty(ICON_SIZE_VAR);
-}
-
-function spacerSize(config) {
-  if (config.position !== "bottom") return "0px";
-  return `calc(${config.bottom_padding} + env(safe-area-inset-bottom))`;
-}
-
-function styleSpacer(spacer, size) {
-  spacer.style.setProperty("display", "block", "important");
-  spacer.style.setProperty("width", "100%", "important");
-  spacer.style.setProperty("height", size, "important");
-  spacer.style.setProperty("min-height", size, "important");
-  spacer.style.setProperty("flex", `0 0 ${size}`, "important");
-  spacer.style.setProperty("grid-column", "1 / -1", "important");
-  spacer.style.setProperty("clear", "both", "important");
-  spacer.style.setProperty("visibility", "hidden", "important");
-  spacer.style.setProperty("pointer-events", "none", "important");
-}
-
-function directSpacer(target) {
-  if (!target?.children) return null;
-  return Array.from(target.children).find((child) => child.hasAttribute?.(SPACER_ATTR)) || null;
-}
-
-function ensureSpacer(target, size) {
-  if (!target?.appendChild) return;
-  let spacer = directSpacer(target);
-  if (!spacer) {
-    spacer = document.createElement("div");
-    spacer.setAttribute(SPACER_ATTR, "");
-    spacer.setAttribute("aria-hidden", "true");
-    target.appendChild(spacer);
-  }
-  styleSpacer(spacer, size);
-}
-
-function removeSpacers(root) {
-  for (const spacer of rootQuerySelectorAll(root, `[${SPACER_ATTR}]`)) {
-    spacer.remove();
-  }
-
-  if (root !== document && root?.children) {
-    for (const child of Array.from(root.children)) {
-      if (child.hasAttribute?.(SPACER_ATTR)) child.remove();
-    }
-  }
-}
-
-function deepestElements(elements) {
-  return elements.filter(
-    (element) => !elements.some((other) => other !== element && element.contains(other))
-  );
-}
-
-function syncViewSpacers(root, routeEnabled, config) {
-  const active =
-    routeEnabled &&
-    config.enabled &&
-    config.position === "bottom" &&
-    (isViewShadowRoot(root) || hasDashboardView(root) || hasMarkedNavigation(root));
-
-  if (!active) {
-    removeSpacers(root);
-    return;
-  }
-
-  const candidates = rootQuerySelectorAll(
-    root,
-    "#view, #root, #columns, main, .view, .root, .columns, .column, .masonry, .sections, .container, .content, .cards"
-  ).filter((element) => !element.closest?.(`[${SPACER_ATTR}], .header`));
-
-  const targets = deepestElements(candidates);
-  const size = spacerSize(config);
-
-  if (!targets.length && root !== document) {
-    ensureSpacer(root, size);
-    return;
-  }
-
-  for (const target of targets) {
-    ensureSpacer(target, size);
-  }
+  header.style.removeProperty(TAB_Y_OFFSET_VAR);
 }
 
 function allowsCurrentRoute() {
@@ -908,21 +1223,30 @@ function hasDashboardView(root) {
 }
 
 function isMarkedTabShadowRoot(root) {
-  return isTabShadowRoot(root) && root.host.closest?.(`.header[${NAV_ATTR}]`);
+  return isShadowRootFor(root, TAB_SHADOW_HOSTS) && closestComposed(root.host, `.header[${NAV_ATTR}]`);
 }
 
-function rootCss(root, cssText, tabShadowCss, viewShadowCss, routeEnabled) {
+function isMarkedTabGroupShadowRoot(root) {
+  return isShadowRootFor(root, TAB_GROUP_SHADOW_HOSTS) && closestComposed(root.host, `.header[${NAV_ATTR}]`);
+}
+
+function isMarkedButtonShadowRoot(root) {
+  return isShadowRootFor(root, BUTTON_SHADOW_HOSTS) && closestComposed(root.host, `.header[${NAV_ATTR}]`);
+}
+
+function rootCss(root, cssText, tabShadowCss, tabGroupShadowCss, buttonShadowCss, routeEnabled) {
   if (!routeEnabled) return "";
-  if (isTabShadowRoot(root)) return isMarkedTabShadowRoot(root) ? tabShadowCss : "";
-  if (isViewShadowRoot(root)) return viewShadowCss;
+  if (isShadowRootFor(root, TAB_SHADOW_HOSTS)) return isMarkedTabShadowRoot(root) ? tabShadowCss : "";
+  if (isShadowRootFor(root, TAB_GROUP_SHADOW_HOSTS)) return isMarkedTabGroupShadowRoot(root) ? tabGroupShadowCss : "";
+  if (isShadowRootFor(root, BUTTON_SHADOW_HOSTS)) return isMarkedButtonShadowRoot(root) ? buttonShadowCss : "";
   if (hasMarkedNavigation(root) || hasDashboardView(root)) return cssText;
   return "";
 }
 
-function installStyle(root, cssText, tabShadowCss, viewShadowCss, routeEnabled) {
+function installStyle(root, cssText, tabShadowCss, tabGroupShadowCss, buttonShadowCss, routeEnabled) {
   const target = root === document ? document.head : root;
   if (!target || !target.querySelector) return;
-  const nextCssText = rootCss(root, cssText, tabShadowCss, viewShadowCss, routeEnabled);
+  const nextCssText = rootCss(root, cssText, tabShadowCss, tabGroupShadowCss, buttonShadowCss, routeEnabled);
 
   let style = target.querySelector(`#${STYLE_ID}`);
   if (!style) {
@@ -945,10 +1269,9 @@ function observeRoot(root) {
   state.observers.set(root, observer);
 }
 
-function walkRoots(root, cssText, tabShadowCss, viewShadowCss, routeEnabled) {
+function walkRoots(root, cssText, tabShadowCss, tabGroupShadowCss, buttonShadowCss, routeEnabled) {
   updateMarkedHeaders(root, routeEnabled);
-  syncViewSpacers(root, routeEnabled, state.config);
-  installStyle(root, cssText, tabShadowCss, viewShadowCss, routeEnabled);
+  installStyle(root, cssText, tabShadowCss, tabGroupShadowCss, buttonShadowCss, routeEnabled);
   observeRoot(root);
 
   const start = root === document ? document.documentElement : root;
@@ -958,7 +1281,7 @@ function walkRoots(root, cssText, tabShadowCss, viewShadowCss, routeEnabled) {
   let node = walker.currentNode;
   while (node) {
     if (node.shadowRoot) {
-      walkRoots(node.shadowRoot, cssText, tabShadowCss, viewShadowCss, routeEnabled);
+      walkRoots(node.shadowRoot, cssText, tabShadowCss, tabGroupShadowCss, buttonShadowCss, routeEnabled);
     }
     node = walker.nextNode();
   }
@@ -971,7 +1294,8 @@ function applyStyles() {
     document,
     buildCss(state.config),
     buildTabShadowCss(state.config),
-    buildViewShadowCss(state.config),
+    buildTabGroupShadowCss(state.config),
+    buildButtonShadowCss(state.config),
     routeEnabled
   );
 }
