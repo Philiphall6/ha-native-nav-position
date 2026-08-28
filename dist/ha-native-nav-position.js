@@ -1,4 +1,4 @@
-const VERSION = "0.1.8";
+const VERSION = "0.1.9";
 const TAG_NAME = "ha-native-nav-position";
 const STYLE_ID = "ha-native-nav-position-style";
 const TAB_SHADOW_HOSTS = new Set([
@@ -7,6 +7,21 @@ const TAB_SHADOW_HOSTS = new Set([
   "md-primary-tab",
   "md-secondary-tab"
 ]);
+const NON_DASHBOARD_PREFIXES = [
+  "/config",
+  "/developer-tools",
+  "/hacs",
+  "/profile",
+  "/energy",
+  "/map",
+  "/history",
+  "/logbook",
+  "/media-browser",
+  "/todo",
+  "/calendar",
+  "/shopping-list",
+  "/settings"
+];
 
 const DEFAULT_CONFIG = {
   enabled: true,
@@ -283,7 +298,6 @@ function buildTabShadowCss(config) {
   if (!config.enabled || !config.hide_labels) return "";
 
   const tabWidth = config.compact ? "48px" : "56px";
-  const activeSize = "48px";
   const iconSize = "24px";
   const css = `
     :host {
@@ -303,16 +317,8 @@ function buildTabShadowCss(config) {
       --mdc-ripple-hover-opacity: 0 !important;
       --mdc-ripple-focus-opacity: 0 !important;
       --mdc-ripple-press-opacity: 0 !important;
-      flex: 0 0 ${tabWidth} !important;
-      width: ${tabWidth} !important;
-      min-width: ${tabWidth} !important;
-      max-width: ${tabWidth} !important;
       height: 48px !important;
-      margin: 0 1px !important;
       border-radius: 24px !important;
-      overflow: visible !important;
-      color: ${config.inactive_color} !important;
-      opacity: 0.82 !important;
       background: transparent !important;
       box-shadow: none !important;
       outline: 0 !important;
@@ -341,12 +347,7 @@ function buildTabShadowCss(config) {
 
     .mdc-tab,
     .mdc-tab--active,
-    .mdc-tab__content,
-    .mdc-tab__text-label,
-    button,
-    [part~="base"],
-    [part~="button"],
-    [part~="content"] {
+    button {
       width: 100% !important;
       height: 48px !important;
       min-height: 48px !important;
@@ -363,16 +364,19 @@ function buildTabShadowCss(config) {
       box-sizing: border-box !important;
     }
 
-    :host([active]) [part~="base"],
-    :host([aria-selected="true"]) [part~="base"],
-    :host([aria-current="page"]) [part~="base"],
-    :host([selected]) [part~="base"],
-    :host(.active) [part~="base"],
-    :host(.iron-selected) [part~="base"] {
-      width: ${activeSize} !important;
-      min-width: ${activeSize} !important;
-      max-width: ${activeSize} !important;
-      background: ${config.active_background} !important;
+    .mdc-tab__content,
+    [part~="content"] {
+      width: 100% !important;
+      height: 48px !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      outline: 0 !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      box-sizing: border-box !important;
     }
 
     .mdc-tab__text-label,
@@ -472,7 +476,9 @@ function buildHeaderCss(config) {
       height: ${config.height} !important;
       min-height: ${config.height} !important;
       padding: 0 10px !important;
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04)) !important;
+      background: transparent !important;
+      border: 0 !important;
+      box-shadow: none !important;
       align-items: center !important;
     `
     : `
@@ -493,9 +499,29 @@ function buildHeaderCss(config) {
       min-height: 48px !important;
       margin: 0 !important;
       border-radius: 24px !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      outline: 0 !important;
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
+    }
+
+    .header ha-menu-button::part(base),
+    .header ha-menu-button::part(button),
+    .header ha-menu-button::part(ripple),
+    .header ha-icon-button::part(base),
+    .header ha-icon-button::part(button),
+    .header ha-icon-button::part(ripple),
+    .header app-toolbar > ha-menu-button::part(base),
+    .header app-toolbar > ha-menu-button::part(button),
+    .header app-toolbar > ha-menu-button::part(ripple),
+    .header app-toolbar > ha-icon-button::part(base),
+    .header app-toolbar > ha-icon-button::part(button),
+    .header app-toolbar > ha-icon-button::part(ripple) {
+      background: transparent !important;
+      box-shadow: none !important;
+      outline: 0 !important;
     }
   `;
 
@@ -574,10 +600,43 @@ function isTabShadowRoot(root) {
   return root !== document && root.host && TAB_SHADOW_HOSTS.has(root.host.localName);
 }
 
-function installStyle(root, cssText, tabShadowCss) {
+function allowsCurrentRoute() {
+  const path = window.location?.pathname || "";
+  return !NON_DASHBOARD_PREFIXES.some(
+    (prefix) => path === prefix || path.startsWith(`${prefix}/`)
+  );
+}
+
+function hasDashboardNavigation(root) {
+  if (!root || !root.querySelector) return false;
+  return Boolean(
+    root.querySelector(
+      ".header ha-tabs, .header ha-tab-group, .header paper-tabs, .header mwc-tab-bar, .header [role='tablist']"
+    )
+  );
+}
+
+function hasDashboardView(root) {
+  if (root === document) return true;
+  if (!root || !root.querySelector) return false;
+  return Boolean(
+    root.querySelector(
+      "ha-panel-lovelace, hui-root, hui-view, hui-sections-view, hui-masonry-view, hui-panel-view, #view"
+    )
+  );
+}
+
+function rootCss(root, cssText, tabShadowCss, routeEnabled) {
+  if (!routeEnabled) return "";
+  if (isTabShadowRoot(root)) return tabShadowCss;
+  if (hasDashboardNavigation(root) || hasDashboardView(root)) return cssText;
+  return "";
+}
+
+function installStyle(root, cssText, tabShadowCss, routeEnabled) {
   const target = root === document ? document.head : root;
   if (!target || !target.querySelector) return;
-  const nextCssText = isTabShadowRoot(root) ? `${cssText}\n${tabShadowCss}` : cssText;
+  const nextCssText = rootCss(root, cssText, tabShadowCss, routeEnabled);
 
   let style = target.querySelector(`#${STYLE_ID}`);
   if (!style) {
@@ -600,8 +659,8 @@ function observeRoot(root) {
   state.observers.set(root, observer);
 }
 
-function walkRoots(root, cssText, tabShadowCss) {
-  installStyle(root, cssText, tabShadowCss);
+function walkRoots(root, cssText, tabShadowCss, routeEnabled) {
+  installStyle(root, cssText, tabShadowCss, routeEnabled);
   observeRoot(root);
 
   const start = root === document ? document.documentElement : root;
@@ -611,7 +670,7 @@ function walkRoots(root, cssText, tabShadowCss) {
   let node = walker.currentNode;
   while (node) {
     if (node.shadowRoot) {
-      walkRoots(node.shadowRoot, cssText, tabShadowCss);
+      walkRoots(node.shadowRoot, cssText, tabShadowCss, routeEnabled);
     }
     node = walker.nextNode();
   }
@@ -619,7 +678,8 @@ function walkRoots(root, cssText, tabShadowCss) {
 
 function applyStyles() {
   state.applyTimer = 0;
-  walkRoots(document, buildCss(state.config), buildTabShadowCss(state.config));
+  const routeEnabled = allowsCurrentRoute();
+  walkRoots(document, buildCss(state.config), buildTabShadowCss(state.config), routeEnabled);
 }
 
 function scheduleApply() {
