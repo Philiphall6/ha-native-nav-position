@@ -1,6 +1,7 @@
-const VERSION = "0.1.9";
+const VERSION = "0.1.10";
 const TAG_NAME = "ha-native-nav-position";
 const STYLE_ID = "ha-native-nav-position-style";
+const NAV_ATTR = "data-ha-native-nav-position-active";
 const TAB_SHADOW_HOSTS = new Set([
   "ha-tab-group-tab",
   "mwc-tab",
@@ -124,9 +125,10 @@ function buildTabCss(config) {
   const tabWidth = config.compact ? "48px" : "56px";
   const iconSize = "24px";
   const activeSize = "48px";
+  const headerSelector = `.header[${NAV_ATTR}]`;
 
   return `
-    ha-tab-group {
+    ${headerSelector} ha-tab-group {
       --mdc-tab-height: 48px !important;
       --mdc-tab-indicator-active-indicator-height: 0 !important;
       --mdc-tab-indicator-active-indicator-color: transparent !important;
@@ -137,8 +139,8 @@ function buildTabCss(config) {
       width: 100% !important;
     }
 
-    ha-tab-group-tab,
-    ha-tab-group-tab[class~="icon-only"] {
+    ${headerSelector} ha-tab-group-tab,
+    ${headerSelector} ha-tab-group-tab[class~="icon-only"] {
       --mdc-tab-min-width: ${tabWidth} !important;
       --mdc-tab-width: ${tabWidth} !important;
       --mdc-tab-height: 48px !important;
@@ -173,12 +175,12 @@ function buildTabCss(config) {
       justify-content: center !important;
     }
 
-    ha-tab-group-tab[active],
-    ha-tab-group-tab[aria-selected="true"],
-    ha-tab-group-tab[aria-current="page"],
-    ha-tab-group-tab[selected],
-    ha-tab-group-tab.active,
-    ha-tab-group-tab.iron-selected {
+    ${headerSelector} ha-tab-group-tab[active],
+    ${headerSelector} ha-tab-group-tab[aria-selected="true"],
+    ${headerSelector} ha-tab-group-tab[aria-current="page"],
+    ${headerSelector} ha-tab-group-tab[selected],
+    ${headerSelector} ha-tab-group-tab.active,
+    ${headerSelector} ha-tab-group-tab.iron-selected {
       color: ${config.active_color} !important;
       opacity: 1 !important;
       background: transparent !important;
@@ -186,8 +188,8 @@ function buildTabCss(config) {
       outline: 0 !important;
     }
 
-    ha-tab-group-tab::part(base),
-    ha-tab-group-tab[class~="icon-only"]::part(base) {
+    ${headerSelector} ha-tab-group-tab::part(base),
+    ${headerSelector} ha-tab-group-tab[class~="icon-only"]::part(base) {
       width: ${activeSize} !important;
       min-width: ${activeSize} !important;
       max-width: ${activeSize} !important;
@@ -206,27 +208,27 @@ function buildTabCss(config) {
       justify-content: center !important;
     }
 
-    ha-tab-group-tab[active]::part(base),
-    ha-tab-group-tab[aria-selected="true"]::part(base),
-    ha-tab-group-tab[aria-current="page"]::part(base),
-    ha-tab-group-tab[selected]::part(base),
-    ha-tab-group-tab.active::part(base),
-    ha-tab-group-tab.iron-selected::part(base) {
+    ${headerSelector} ha-tab-group-tab[active]::part(base),
+    ${headerSelector} ha-tab-group-tab[aria-selected="true"]::part(base),
+    ${headerSelector} ha-tab-group-tab[aria-current="page"]::part(base),
+    ${headerSelector} ha-tab-group-tab[selected]::part(base),
+    ${headerSelector} ha-tab-group-tab.active::part(base),
+    ${headerSelector} ha-tab-group-tab.iron-selected::part(base) {
       background: ${config.active_background} !important;
     }
 
-    ha-tab-group-tab .mdc-tab__text-label,
-    ha-tab-group-tab .mdc-tab__content span,
-    ha-tab-group-tab .label {
+    ${headerSelector} ha-tab-group-tab .mdc-tab__text-label,
+    ${headerSelector} ha-tab-group-tab .mdc-tab__content span,
+    ${headerSelector} ha-tab-group-tab .label {
       display: none !important;
     }
 
-    ha-tab-group-tab .mdc-tab,
-    ha-tab-group-tab mwc-tab,
-    ha-tab-group-tab md-primary-tab,
-    ha-tab-group-tab md-secondary-tab,
-    ha-tab-group-tab .mdc-tab__content,
-    ha-tab-group-tab [part~="content"] {
+    ${headerSelector} ha-tab-group-tab .mdc-tab,
+    ${headerSelector} ha-tab-group-tab mwc-tab,
+    ${headerSelector} ha-tab-group-tab md-primary-tab,
+    ${headerSelector} ha-tab-group-tab md-secondary-tab,
+    ${headerSelector} ha-tab-group-tab .mdc-tab__content,
+    ${headerSelector} ha-tab-group-tab [part~="content"] {
       width: 100% !important;
       height: 48px !important;
       padding: 0 !important;
@@ -241,8 +243,8 @@ function buildTabCss(config) {
       box-sizing: border-box !important;
     }
 
-    ha-tab-group-tab ha-icon,
-    ha-tab-group-tab[class~="icon-only"] ha-icon {
+    ${headerSelector} ha-tab-group-tab ha-icon,
+    ${headerSelector} ha-tab-group-tab[class~="icon-only"] ha-icon {
       --mdc-icon-size: ${iconSize};
       width: ${iconSize} !important;
       height: ${iconSize} !important;
@@ -255,23 +257,23 @@ function buildTabCss(config) {
       transform: none !important;
     }
 
-    ha-tab-group-tab .mdc-tab-indicator,
-    ha-tab-group-tab .mdc-tab-indicator--active,
-    ha-tab-group-tab .mdc-tab-indicator__content,
-    ha-tab-group-tab .mdc-tab-indicator__content--underline,
-    ha-tab-group-tab .mdc-tab-indicator__content--fade,
-    ha-tab-group-tab [class*="active-indicator"],
-    ha-tab-group-tab [class*="selection-indicator"],
-    ha-tab-group-tab .mdc-tab__ripple,
-    ha-tab-group-tab mwc-ripple,
-    ha-tab-group-tab md-ripple,
-    ha-tab-group-tab md-focus-ring,
-    ha-tab-group-tab::part(active-indicator),
-    ha-tab-group-tab::part(activeIndicator),
-    ha-tab-group-tab::part(selection-indicator),
-    ha-tab-group-tab::part(indicator),
-    ha-tab-group-tab::part(ripple),
-    ha-tab-group-tab::part(focus-ring) {
+    ${headerSelector} ha-tab-group-tab .mdc-tab-indicator,
+    ${headerSelector} ha-tab-group-tab .mdc-tab-indicator--active,
+    ${headerSelector} ha-tab-group-tab .mdc-tab-indicator__content,
+    ${headerSelector} ha-tab-group-tab .mdc-tab-indicator__content--underline,
+    ${headerSelector} ha-tab-group-tab .mdc-tab-indicator__content--fade,
+    ${headerSelector} ha-tab-group-tab [class*="active-indicator"],
+    ${headerSelector} ha-tab-group-tab [class*="selection-indicator"],
+    ${headerSelector} ha-tab-group-tab .mdc-tab__ripple,
+    ${headerSelector} ha-tab-group-tab mwc-ripple,
+    ${headerSelector} ha-tab-group-tab md-ripple,
+    ${headerSelector} ha-tab-group-tab md-focus-ring,
+    ${headerSelector} ha-tab-group-tab::part(active-indicator),
+    ${headerSelector} ha-tab-group-tab::part(activeIndicator),
+    ${headerSelector} ha-tab-group-tab::part(selection-indicator),
+    ${headerSelector} ha-tab-group-tab::part(indicator),
+    ${headerSelector} ha-tab-group-tab::part(ripple),
+    ${headerSelector} ha-tab-group-tab::part(focus-ring) {
       display: none !important;
       opacity: 0 !important;
       height: 0 !important;
@@ -282,10 +284,10 @@ function buildTabCss(config) {
       transform: scale(0) !important;
     }
 
-    ha-tab-group-tab .mdc-tab__ripple::before,
-    ha-tab-group-tab .mdc-tab__ripple::after,
-    ha-tab-group-tab::before,
-    ha-tab-group-tab::after {
+    ${headerSelector} ha-tab-group-tab .mdc-tab__ripple::before,
+    ${headerSelector} ha-tab-group-tab .mdc-tab__ripple::after,
+    ${headerSelector} ha-tab-group-tab::before,
+    ${headerSelector} ha-tab-group-tab::after {
       display: none !important;
       opacity: 0 !important;
       background: transparent !important;
@@ -449,6 +451,7 @@ function buildTabShadowCss(config) {
 }
 
 function buildHeaderCss(config) {
+  const headerSelector = `.header[${NAV_ATTR}]`;
   const dockCss = config.dock
     ? `
       left: max(${config.side_gap}, env(safe-area-inset-left)) !important;
@@ -486,10 +489,10 @@ function buildHeaderCss(config) {
     `;
 
   const sideButtonCss = `
-    .header ha-menu-button,
-    .header ha-icon-button,
-    .header app-toolbar > ha-menu-button,
-    .header app-toolbar > ha-icon-button {
+    ${headerSelector} ha-menu-button,
+    ${headerSelector} ha-icon-button,
+    ${headerSelector} app-toolbar > ha-menu-button,
+    ${headerSelector} app-toolbar > ha-icon-button {
       --mdc-icon-button-size: 48px !important;
       --mdc-icon-size: 24px !important;
       flex: 0 0 48px !important;
@@ -507,18 +510,18 @@ function buildHeaderCss(config) {
       justify-content: center !important;
     }
 
-    .header ha-menu-button::part(base),
-    .header ha-menu-button::part(button),
-    .header ha-menu-button::part(ripple),
-    .header ha-icon-button::part(base),
-    .header ha-icon-button::part(button),
-    .header ha-icon-button::part(ripple),
-    .header app-toolbar > ha-menu-button::part(base),
-    .header app-toolbar > ha-menu-button::part(button),
-    .header app-toolbar > ha-menu-button::part(ripple),
-    .header app-toolbar > ha-icon-button::part(base),
-    .header app-toolbar > ha-icon-button::part(button),
-    .header app-toolbar > ha-icon-button::part(ripple) {
+    ${headerSelector} ha-menu-button::part(base),
+    ${headerSelector} ha-menu-button::part(button),
+    ${headerSelector} ha-menu-button::part(ripple),
+    ${headerSelector} ha-icon-button::part(base),
+    ${headerSelector} ha-icon-button::part(button),
+    ${headerSelector} ha-icon-button::part(ripple),
+    ${headerSelector} app-toolbar > ha-menu-button::part(base),
+    ${headerSelector} app-toolbar > ha-menu-button::part(button),
+    ${headerSelector} app-toolbar > ha-menu-button::part(ripple),
+    ${headerSelector} app-toolbar > ha-icon-button::part(base),
+    ${headerSelector} app-toolbar > ha-icon-button::part(button),
+    ${headerSelector} app-toolbar > ha-icon-button::part(ripple) {
       background: transparent !important;
       box-shadow: none !important;
       outline: 0 !important;
@@ -527,7 +530,7 @@ function buildHeaderCss(config) {
 
   if (config.position === "top") {
     return `
-      .header {
+      ${headerSelector} {
         position: fixed !important;
         top: calc(${config.offset} + env(safe-area-inset-top)) !important;
         bottom: auto !important;
@@ -535,17 +538,18 @@ function buildHeaderCss(config) {
         ${dockCss}
       }
 
-      .header app-toolbar,
-      .header ha-tabs,
-      .header ha-tab-group {
+      ${headerSelector} app-toolbar,
+      ${headerSelector} ha-tabs,
+      ${headerSelector} ha-tab-group {
         ${toolbarCss}
       }
 
       ${sideButtonCss}
 
       hui-view,
-      #view,
-      main {
+      hui-sections-view,
+      hui-masonry-view,
+      hui-panel-view {
         padding-top: calc(${config.top_padding} + env(safe-area-inset-top)) !important;
         padding-bottom: 0 !important;
       }
@@ -553,7 +557,7 @@ function buildHeaderCss(config) {
   }
 
   return `
-    .header {
+    ${headerSelector} {
       position: fixed !important;
       top: auto !important;
       bottom: calc(${config.offset} + env(safe-area-inset-bottom)) !important;
@@ -561,17 +565,18 @@ function buildHeaderCss(config) {
       ${dockCss}
     }
 
-    .header app-toolbar,
-    .header ha-tabs,
-    .header ha-tab-group {
+    ${headerSelector} app-toolbar,
+    ${headerSelector} ha-tabs,
+    ${headerSelector} ha-tab-group {
       ${toolbarCss}
     }
 
     ${sideButtonCss}
 
     hui-view,
-    #view,
-    main {
+    hui-sections-view,
+    hui-masonry-view,
+    hui-panel-view {
       padding-bottom: calc(${config.bottom_padding} + env(safe-area-inset-bottom)) !important;
     }
   `;
@@ -600,6 +605,11 @@ function isTabShadowRoot(root) {
   return root !== document && root.host && TAB_SHADOW_HOSTS.has(root.host.localName);
 }
 
+function rootQuerySelectorAll(root, selector) {
+  if (!root || !root.querySelectorAll) return [];
+  return Array.from(root.querySelectorAll(selector));
+}
+
 function allowsCurrentRoute() {
   const path = window.location?.pathname || "";
   return !NON_DASHBOARD_PREFIXES.some(
@@ -607,29 +617,46 @@ function allowsCurrentRoute() {
   );
 }
 
-function hasDashboardNavigation(root) {
+function hasNavigationTabs(element) {
+  if (!element || !element.querySelector) return false;
+  return Boolean(
+    element.querySelector("ha-tabs, ha-tab-group, paper-tabs, mwc-tab-bar, [role='tablist']")
+  );
+}
+
+function updateMarkedHeaders(root, routeEnabled) {
+  for (const header of rootQuerySelectorAll(root, `.header, [${NAV_ATTR}]`)) {
+    const shouldMark = routeEnabled && header.classList?.contains("header") && hasNavigationTabs(header);
+    if (shouldMark) {
+      header.setAttribute(NAV_ATTR, "");
+    } else {
+      header.removeAttribute(NAV_ATTR);
+    }
+  }
+}
+
+function hasMarkedNavigation(root) {
+  if (!root || !root.querySelector) return false;
+  return Boolean(root.querySelector(`.header[${NAV_ATTR}]`));
+}
+
+function hasDashboardView(root) {
   if (!root || !root.querySelector) return false;
   return Boolean(
     root.querySelector(
-      ".header ha-tabs, .header ha-tab-group, .header paper-tabs, .header mwc-tab-bar, .header [role='tablist']"
+      "ha-panel-lovelace, hui-root, hui-view, hui-sections-view, hui-masonry-view, hui-panel-view"
     )
   );
 }
 
-function hasDashboardView(root) {
-  if (root === document) return true;
-  if (!root || !root.querySelector) return false;
-  return Boolean(
-    root.querySelector(
-      "ha-panel-lovelace, hui-root, hui-view, hui-sections-view, hui-masonry-view, hui-panel-view, #view"
-    )
-  );
+function isMarkedTabShadowRoot(root) {
+  return isTabShadowRoot(root) && root.host.closest?.(`.header[${NAV_ATTR}]`);
 }
 
 function rootCss(root, cssText, tabShadowCss, routeEnabled) {
   if (!routeEnabled) return "";
-  if (isTabShadowRoot(root)) return tabShadowCss;
-  if (hasDashboardNavigation(root) || hasDashboardView(root)) return cssText;
+  if (isTabShadowRoot(root)) return isMarkedTabShadowRoot(root) ? tabShadowCss : "";
+  if (hasMarkedNavigation(root) || hasDashboardView(root)) return cssText;
   return "";
 }
 
@@ -660,6 +687,7 @@ function observeRoot(root) {
 }
 
 function walkRoots(root, cssText, tabShadowCss, routeEnabled) {
+  updateMarkedHeaders(root, routeEnabled);
   installStyle(root, cssText, tabShadowCss, routeEnabled);
   observeRoot(root);
 
