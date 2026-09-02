@@ -1,7 +1,9 @@
-const VERSION = "1.0.3";
+const VERSION = "1.0.4";
 const TAG_NAME = "ha-native-nav-position";
 const STYLE_ID = "ha-native-nav-position-style";
 const NAV_ATTR = "data-ha-native-nav-position-active";
+const DOCK_ATTR = "data-ha-native-nav-position-dock";
+const SOURCE_ATTR = "data-ha-native-nav-position-source";
 const INLINE_ATTR = "data-ha-native-nav-position-inline";
 const CONTROL_SIZE_VAR = "--ha-native-nav-control-size";
 const ICON_SIZE_VAR = "--ha-native-nav-icon-size";
@@ -21,6 +23,7 @@ const TAB_GROUP_SHADOW_HOSTS = new Set([
 const BUTTON_SHADOW_HOSTS = new Set([
   "ha-menu-button",
   "ha-icon-button",
+  "ha-button-menu",
   "ha-button",
   "mwc-icon-button",
   "md-icon-button",
@@ -28,8 +31,10 @@ const BUTTON_SHADOW_HOSTS = new Set([
 ]);
 const TAB_SELECTOR = "ha-tab-group-tab, paper-tab, mwc-tab, md-primary-tab, md-secondary-tab";
 const TAB_GROUP_SELECTOR = "ha-tab-group, ha-tabs, paper-tabs, mwc-tab-bar, [role='tablist']";
-const TOOLBAR_CONTAINER_SELECTOR = ".toolbar, app-toolbar, ha-tabs";
-const SIDE_BUTTON_SELECTOR = "ha-menu-button, ha-icon-button, app-toolbar > ha-menu-button, app-toolbar > ha-icon-button";
+const DOCK_TOOLBAR_CLASS = "ha-native-nav-position-toolbar";
+const TOOLBAR_CONTAINER_SELECTOR = `.toolbar, app-toolbar, ha-tabs, .${DOCK_TOOLBAR_CLASS}`;
+const DOCK_ALIGN_SELECTOR = "ha-menu-button, ha-icon-button, ha-button-menu, ha-tab-group, ha-tabs, paper-tabs, mwc-tab-bar, [role='tablist']";
+const SIDE_BUTTON_SELECTOR = "ha-menu-button, ha-icon-button, ha-button-menu, app-toolbar > ha-menu-button, app-toolbar > ha-icon-button, app-toolbar > ha-button-menu";
 const ICON_SELECTOR = "ha-icon, ha-svg-icon, wa-icon, mwc-icon, md-icon, iron-icon, svg, .ha-icon, .icon";
 const TAB_INTERNAL_SELECTOR = [
   ".tab",
@@ -97,6 +102,9 @@ const state = {
   observers: new WeakMap(),
   inlineStyles: new WeakMap(),
   inlineElements: new Set(),
+  docks: new WeakMap(),
+  dockHeaders: new Set(),
+  movedElements: new WeakMap(),
   applyTimer: 0,
   started: false
 };
@@ -483,6 +491,8 @@ function buildTabCss(config) {
       box-shadow: none !important;
     }
   `;
+
+  return `${css}\n${css.replaceAll(headerSelector, `[${DOCK_ATTR}]`)}`;
 }
 
 function buildTabShadowCss(config) {
@@ -1177,6 +1187,7 @@ function buildButtonShadowCss(config) {
 
 function buildHeaderCss(config) {
   const headerSelector = `.header[${NAV_ATTR}]`;
+  const dockSelector = `[${DOCK_ATTR}]`;
   const controlSize = `var(${CONTROL_SIZE_VAR}, 48px)`;
   const iconSize = `var(${ICON_SIZE_VAR}, 24px)`;
   const controlRadius = `calc(${controlSize} / 2)`;
@@ -1222,7 +1233,7 @@ function buildHeaderCss(config) {
       align-items: center !important;
       justify-content: center !important;
       box-sizing: border-box !important;
-      overflow: hidden !important;
+      overflow: visible !important;
       transform: none !important;
       translate: 0 0 !important;
     `
@@ -1254,7 +1265,7 @@ function buildHeaderCss(config) {
       align-items: center !important;
       justify-content: center !important;
       box-sizing: border-box !important;
-      overflow: hidden !important;
+      overflow: visible !important;
       transform: none !important;
       translate: 0 0 !important;
     }
@@ -1279,8 +1290,10 @@ function buildHeaderCss(config) {
 
     ${headerSelector} ha-menu-button,
     ${headerSelector} ha-icon-button,
+    ${headerSelector} ha-button-menu,
     ${headerSelector} app-toolbar > ha-menu-button,
-    ${headerSelector} app-toolbar > ha-icon-button {
+    ${headerSelector} app-toolbar > ha-icon-button,
+    ${headerSelector} app-toolbar > ha-button-menu {
       --mdc-icon-button-size: ${controlSize} !important;
       --mdc-icon-size: ${iconSize} !important;
       flex: 0 0 ${controlSize} !important;
@@ -1306,12 +1319,18 @@ function buildHeaderCss(config) {
     ${headerSelector} ha-icon-button::part(base),
     ${headerSelector} ha-icon-button::part(button),
     ${headerSelector} ha-icon-button::part(ripple),
+    ${headerSelector} ha-button-menu::part(base),
+    ${headerSelector} ha-button-menu::part(button),
+    ${headerSelector} ha-button-menu::part(ripple),
     ${headerSelector} app-toolbar > ha-menu-button::part(base),
     ${headerSelector} app-toolbar > ha-menu-button::part(button),
     ${headerSelector} app-toolbar > ha-menu-button::part(ripple),
     ${headerSelector} app-toolbar > ha-icon-button::part(base),
     ${headerSelector} app-toolbar > ha-icon-button::part(button),
-    ${headerSelector} app-toolbar > ha-icon-button::part(ripple) {
+    ${headerSelector} app-toolbar > ha-icon-button::part(ripple),
+    ${headerSelector} app-toolbar > ha-button-menu::part(base),
+    ${headerSelector} app-toolbar > ha-button-menu::part(button),
+    ${headerSelector} app-toolbar > ha-button-menu::part(ripple) {
       background: transparent !important;
       box-shadow: none !important;
       outline: 0 !important;
@@ -1319,8 +1338,10 @@ function buildHeaderCss(config) {
 
     ${headerSelector} ha-menu-button::part(label),
     ${headerSelector} ha-icon-button::part(label),
+    ${headerSelector} ha-button-menu::part(label),
     ${headerSelector} app-toolbar > ha-menu-button::part(label),
-    ${headerSelector} app-toolbar > ha-icon-button::part(label) {
+    ${headerSelector} app-toolbar > ha-icon-button::part(label),
+    ${headerSelector} app-toolbar > ha-button-menu::part(label) {
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
@@ -1340,12 +1361,18 @@ function buildHeaderCss(config) {
     ${headerSelector} ha-icon-button ha-icon,
     ${headerSelector} ha-icon-button ha-svg-icon,
     ${headerSelector} ha-icon-button svg,
+    ${headerSelector} ha-button-menu ha-icon,
+    ${headerSelector} ha-button-menu ha-svg-icon,
+    ${headerSelector} ha-button-menu svg,
     ${headerSelector} app-toolbar > ha-menu-button ha-icon,
     ${headerSelector} app-toolbar > ha-menu-button ha-svg-icon,
     ${headerSelector} app-toolbar > ha-menu-button svg,
     ${headerSelector} app-toolbar > ha-icon-button ha-icon,
     ${headerSelector} app-toolbar > ha-icon-button ha-svg-icon,
-    ${headerSelector} app-toolbar > ha-icon-button svg {
+    ${headerSelector} app-toolbar > ha-icon-button svg,
+    ${headerSelector} app-toolbar > ha-button-menu ha-icon,
+    ${headerSelector} app-toolbar > ha-button-menu ha-svg-icon,
+    ${headerSelector} app-toolbar > ha-button-menu svg {
       --mdc-icon-size: ${iconSize} !important;
       width: ${iconSize} !important;
       height: ${iconSize} !important;
@@ -1361,6 +1388,124 @@ function buildHeaderCss(config) {
       translate: 0 0 !important;
     }
   `;
+
+  const dockToolbarCss = `
+    ${dockSelector} .${DOCK_TOOLBAR_CLASS} {
+      width: 100% !important;
+      height: ${config.height} !important;
+      min-height: ${config.height} !important;
+      max-height: ${config.height} !important;
+      padding: 0 10px !important;
+      padding-top: 0 !important;
+      padding-bottom: 0 !important;
+      padding-block: 0 !important;
+      margin: 0 !important;
+      background: transparent !important;
+      border: 0 !important;
+      box-shadow: none !important;
+      outline: 0 !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      gap: 0 !important;
+      box-sizing: border-box !important;
+      overflow: visible !important;
+      transform: none !important;
+      translate: 0 0 !important;
+      pointer-events: auto !important;
+    }
+
+    ${dockSelector} .${DOCK_TOOLBAR_CLASS}::before,
+    ${dockSelector} .${DOCK_TOOLBAR_CLASS}::after {
+      display: none !important;
+      opacity: 0 !important;
+      background: transparent !important;
+      border: 0 !important;
+      box-shadow: none !important;
+      outline: 0 !important;
+    }
+  `;
+
+  const dockSideButtonCss = sideButtonCss.replaceAll(headerSelector, dockSelector);
+
+  if (config.dock) {
+    const dockPositionCss =
+      config.position === "top"
+        ? `
+          top: calc(${config.offset} + env(safe-area-inset-top)) !important;
+          bottom: auto !important;
+        `
+        : `
+          top: auto !important;
+          bottom: calc(${config.offset} + env(safe-area-inset-bottom)) !important;
+        `;
+    const viewPaddingCss =
+      config.position === "top"
+        ? `
+          padding-top: calc(${config.top_padding} + env(safe-area-inset-top)) !important;
+          padding-bottom: 0 !important;
+          scroll-padding-top: calc(${config.top_padding} + env(safe-area-inset-top)) !important;
+        `
+        : `
+          padding-bottom: calc(${config.bottom_padding} + env(safe-area-inset-bottom)) !important;
+          scroll-padding-bottom: calc(${config.bottom_padding} + env(safe-area-inset-bottom)) !important;
+        `;
+
+    return `
+      ${headerSelector} {
+        height: 0 !important;
+        min-height: 0 !important;
+        max-height: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        background: transparent !important;
+        border: 0 !important;
+        box-shadow: none !important;
+        outline: 0 !important;
+        overflow: visible !important;
+        pointer-events: none !important;
+      }
+
+      ${headerSelector} > :not([${DOCK_ATTR}]) {
+        visibility: hidden !important;
+        pointer-events: none !important;
+      }
+
+      ${dockSelector} {
+        position: fixed !important;
+        ${dockPositionCss}
+        z-index: ${config.z_index} !important;
+        transform: translateZ(0) !important;
+        color: ${config.inactive_color} !important;
+        pointer-events: auto !important;
+        ${dockCss}
+      }
+
+      ${dockToolbarCss}
+
+      ${dockSelector} app-toolbar,
+      ${dockSelector} ha-tabs,
+      ${dockSelector} ha-tab-group {
+        ${toolbarCss}
+      }
+
+      ${sideButtonCss}
+      ${dockSideButtonCss}
+
+      ha-panel-lovelace,
+      hui-root,
+      hui-view-container,
+      #view,
+      main,
+      hui-view,
+      hui-sections-view,
+      hui-masonry-view,
+      hui-panel-view {
+        ${viewPaddingCss}
+        box-sizing: border-box !important;
+      }
+    `;
+  }
 
   if (config.position === "top") {
     return `
@@ -1546,9 +1691,119 @@ function clearInlineStylesForHeader(header) {
 }
 
 function clearAllInlineStyles() {
+  restoreAllDocks();
   for (const element of Array.from(state.inlineElements)) {
     clearInlineStyles(element);
   }
+}
+
+function findSourceToolbar(header) {
+  return header.querySelector(".toolbar") || header.querySelector("app-toolbar") || header;
+}
+
+function getDockRecord(header) {
+  let record = state.docks.get(header);
+  if (record?.dock?.isConnected && record?.toolbar?.isConnected) return record;
+
+  const dock = document.createElement("div");
+  dock.setAttribute(DOCK_ATTR, "");
+
+  const toolbar = document.createElement("div");
+  toolbar.className = DOCK_TOOLBAR_CLASS;
+  dock.appendChild(toolbar);
+
+  const parent = header.parentNode;
+  if (parent) {
+    parent.insertBefore(dock, header.nextSibling);
+  } else {
+    document.body.appendChild(dock);
+  }
+
+  record = {
+    dock,
+    toolbar,
+    items: new Set()
+  };
+  state.docks.set(header, record);
+  state.dockHeaders.add(header);
+  return record;
+}
+
+function isNestedInSelectedElement(element, selected) {
+  let parent = element.parentElement;
+  while (parent) {
+    if (selected.has(parent)) return true;
+    parent = parent.parentElement;
+  }
+  return false;
+}
+
+function collectDockItems(header) {
+  const source = findSourceToolbar(header);
+  const directItems = Array.from(source.children || []).filter(
+    (element) =>
+      element.matches?.(DOCK_ALIGN_SELECTOR) ||
+      element.querySelector?.(TAB_GROUP_SELECTOR) ||
+      element.querySelector?.(SIDE_BUTTON_SELECTOR)
+  );
+
+  if (directItems.length) return directItems;
+
+  const candidates = new Set(header.querySelectorAll(DOCK_ALIGN_SELECTOR));
+  return Array.from(candidates).filter((element) => !isNestedInSelectedElement(element, candidates));
+}
+
+function restoreMovedElement(element) {
+  const original = state.movedElements.get(element);
+  if (!original?.parent) return;
+
+  const nextSibling =
+    original.nextSibling?.isConnected && original.nextSibling.parentNode === original.parent
+      ? original.nextSibling
+      : null;
+  original.parent.insertBefore(element, nextSibling);
+  element.removeAttribute?.(SOURCE_ATTR);
+  state.movedElements.delete(element);
+}
+
+function restoreDock(header) {
+  const record = state.docks.get(header);
+  if (!record) return;
+
+  for (const element of Array.from(record.items)) {
+    restoreMovedElement(element);
+  }
+
+  record.dock.remove();
+  state.docks.delete(header);
+  state.dockHeaders.delete(header);
+}
+
+function restoreAllDocks() {
+  for (const header of Array.from(state.dockHeaders)) {
+    restoreDock(header);
+  }
+}
+
+function ensureDock(header) {
+  if (!state.config.dock) return header;
+
+  const record = getDockRecord(header);
+  const items = collectDockItems(header);
+
+  for (const element of items) {
+    if (!state.movedElements.has(element)) {
+      state.movedElements.set(element, {
+        parent: element.parentNode,
+        nextSibling: element.nextSibling
+      });
+    }
+    element.setAttribute?.(SOURCE_ATTR, "");
+    record.items.add(element);
+    record.toolbar.appendChild(element);
+  }
+
+  return record.dock;
 }
 
 function collectComposedElements(root, selector, results = new Set()) {
@@ -1714,7 +1969,7 @@ function syncTabControl(tab, controlSize, iconSize, radius) {
     alignItems: "center",
     justifyContent: "center",
     boxSizing: "border-box",
-    overflow: "hidden",
+    overflow: "visible",
     border: "0",
     borderBottom: "0",
     borderRadius: radius,
@@ -1857,6 +2112,59 @@ function syncTabGroupInternals(group, controlSize) {
   });
 }
 
+function elementCenterY(element) {
+  if (!element?.getBoundingClientRect) return null;
+  const rect = element.getBoundingClientRect();
+  if (!Number.isFinite(rect.height) || rect.height <= 0) return null;
+  return rect.top + rect.height / 2;
+}
+
+function average(values) {
+  const valid = values.filter((value) => Number.isFinite(value));
+  if (!valid.length) return null;
+  return valid.reduce((sum, value) => sum + value, 0) / valid.length;
+}
+
+function visualCenterY(control) {
+  if (!control) return null;
+
+  const iconCenters = Array.from(collectComposedElements(control, ICON_SELECTOR))
+    .map(elementCenterY)
+    .filter((value) => value !== null);
+  const assignedIconCenters = Array.from(collectAssignedSlotElements(control.shadowRoot || control))
+    .filter((element) => element.matches?.(ICON_SELECTOR))
+    .map(elementCenterY)
+    .filter((value) => value !== null);
+  const centers = [...iconCenters, ...assignedIconCenters];
+
+  return average(centers) ?? elementCenterY(control);
+}
+
+function topLevelDockControls(navRoot) {
+  const candidates = new Set(navRoot.querySelectorAll(DOCK_ALIGN_SELECTOR));
+  return Array.from(candidates).filter((element) => !isNestedInSelectedElement(element, candidates));
+}
+
+function syncDockContentAlignment(navRoot) {
+  if (!state.config.dock) return;
+
+  const target = elementCenterY(navRoot);
+  if (target === null) return;
+
+  for (const control of topLevelDockControls(navRoot)) {
+    const current = visualCenterY(control);
+    if (current === null) continue;
+
+    const shift = clampNumber(target - current, -96, 96);
+    const transform = Math.abs(shift) < 0.5 ? "none" : `translateY(${shift.toFixed(2)}px)`;
+    setInlineStyles(control, {
+      transform,
+      translate: "0 0",
+      willChange: "transform"
+    });
+  }
+}
+
 function syncNavigationControls(header, controlSizeValue, iconSizeValue) {
   const controlSize = `${controlSizeValue}px`;
   const iconSize = `${iconSizeValue}px`;
@@ -1889,10 +2197,13 @@ function syncNavigationControls(header, controlSizeValue, iconSizeValue) {
   for (const tab of header.querySelectorAll(TAB_SELECTOR)) {
     syncTabControl(tab, controlSize, iconSize, radius);
   }
+
+  syncDockContentAlignment(header);
 }
 
 function syncHeaderMetrics(header) {
-  const button = header.querySelector(
+  const navRoot = state.config.dock ? ensureDock(header) : header;
+  const button = navRoot.querySelector(
     "ha-menu-button, app-toolbar > ha-menu-button, ha-icon-button[slot='navigationIcon'], app-toolbar > ha-icon-button"
   );
 
@@ -1903,10 +2214,19 @@ function syncHeaderMetrics(header) {
   header.style.setProperty(CONTROL_SIZE_VAR, `${controlSize}px`);
   header.style.setProperty(ICON_SIZE_VAR, `${iconSize}px`);
   header.style.setProperty(TAB_Y_OFFSET_VAR, state.config.tab_y_offset);
-  syncNavigationControls(header, controlSize, iconSize);
+  if (navRoot !== header) {
+    navRoot.style.setProperty(CONTROL_SIZE_VAR, `${controlSize}px`);
+    navRoot.style.setProperty(ICON_SIZE_VAR, `${iconSize}px`);
+    navRoot.style.setProperty(TAB_Y_OFFSET_VAR, state.config.tab_y_offset);
+  }
+  syncNavigationControls(navRoot, controlSize, iconSize);
+  if (navRoot !== header) {
+    window.requestAnimationFrame(() => syncNavigationControls(navRoot, controlSize, iconSize));
+  }
 }
 
 function clearHeaderMetrics(header) {
+  restoreDock(header);
   clearInlineStylesForHeader(header);
   header.style.removeProperty(CONTROL_SIZE_VAR);
   header.style.removeProperty(ICON_SIZE_VAR);
@@ -1929,7 +2249,11 @@ function hasNavigationTabs(element) {
 
 function updateMarkedHeaders(root, routeEnabled) {
   for (const header of rootQuerySelectorAll(root, `.header, [${NAV_ATTR}]`)) {
-    const shouldMark = routeEnabled && header.classList?.contains("header") && hasNavigationTabs(header);
+    const dockRecord = state.docks.get(header);
+    const shouldMark =
+      routeEnabled &&
+      header.classList?.contains("header") &&
+      (hasNavigationTabs(header) || Boolean(dockRecord?.items?.size));
     if (shouldMark) {
       header.setAttribute(NAV_ATTR, "");
       syncHeaderMetrics(header);
@@ -1955,15 +2279,15 @@ function hasDashboardView(root) {
 }
 
 function isMarkedTabShadowRoot(root) {
-  return isShadowRootFor(root, TAB_SHADOW_HOSTS) && closestComposed(root.host, `.header[${NAV_ATTR}]`);
+  return isShadowRootFor(root, TAB_SHADOW_HOSTS) && closestComposed(root.host, `.header[${NAV_ATTR}], [${DOCK_ATTR}]`);
 }
 
 function isMarkedTabGroupShadowRoot(root) {
-  return isShadowRootFor(root, TAB_GROUP_SHADOW_HOSTS) && closestComposed(root.host, `.header[${NAV_ATTR}]`);
+  return isShadowRootFor(root, TAB_GROUP_SHADOW_HOSTS) && closestComposed(root.host, `.header[${NAV_ATTR}], [${DOCK_ATTR}]`);
 }
 
 function isMarkedButtonShadowRoot(root) {
-  return isShadowRootFor(root, BUTTON_SHADOW_HOSTS) && closestComposed(root.host, `.header[${NAV_ATTR}]`);
+  return isShadowRootFor(root, BUTTON_SHADOW_HOSTS) && closestComposed(root.host, `.header[${NAV_ATTR}], [${DOCK_ATTR}]`);
 }
 
 function rootCss(root, cssText, tabShadowCss, tabGroupShadowCss, buttonShadowCss, routeEnabled) {
