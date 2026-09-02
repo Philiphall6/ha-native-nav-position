@@ -1,4 +1,4 @@
-const VERSION = "1.0.8";
+const VERSION = "1.0.9";
 const TAG_NAME = "ha-native-nav-position";
 const STYLE_ID = "ha-native-nav-position-style";
 const NAV_ATTR = "data-ha-native-nav-position-active";
@@ -107,6 +107,7 @@ const state = {
   dockHeaders: new Set(),
   movedElements: new WeakMap(),
   generatedIcons: new Set(),
+  anchoredTabGroups: new WeakSet(),
   applyTimer: 0,
   started: false
 };
@@ -2155,6 +2156,7 @@ function syncTabControl(tab, controlSize, iconSize, radius, index = 0, margin = 
     opacity: active ? "1" : "0.82",
     transform: "none",
     translate: "0 0",
+    scrollSnapAlign: "none",
     touchAction: "pan-x"
   });
 
@@ -2264,6 +2266,9 @@ function syncTabGroupInternals(group, controlSize, shouldCenter = false) {
       boxSizing: "border-box",
       overflowX: element.localName === "slot" ? "visible" : "auto",
       overflowY: element.localName === "slot" ? "visible" : "hidden",
+      scrollBehavior: "auto",
+      scrollSnapType: "none",
+      scrollPaddingInline: "0",
       position: "relative",
       top: "0",
       bottom: "auto",
@@ -2292,47 +2297,33 @@ function syncTabGroupScroll(group) {
   const tabs = Array.from(group.querySelectorAll(TAB_SELECTOR));
   if (!tabs.length) return;
 
-  const groupRect = group.getBoundingClientRect();
-  const totalWidth = tabs.reduce((sum, tab) => {
-    const rect = tab.getBoundingClientRect();
-    const style = window.getComputedStyle?.(tab);
-    const marginLeft = parseFloat(style?.marginLeft || "0") || 0;
-    const marginRight = parseFloat(style?.marginRight || "0") || 0;
-    const width = Number.isFinite(rect.width) && rect.width > 0 ? rect.width : 48;
-    return sum + width + marginLeft + marginRight;
-  }, 0);
-  const activeTab = tabs.find(isActiveTab) || tabs[0];
-
-  const syncScroll = (element) => {
+  const resetScroll = (element) => {
     if (!element) return;
     try {
-      const rect = element.getBoundingClientRect?.() || groupRect;
-      const clientWidth = element.clientWidth || rect.width || groupRect.width;
-      const scrollWidth = Math.max(element.scrollWidth || 0, totalWidth);
-      const maxScroll = Math.max(0, scrollWidth - clientWidth);
-      if (totalWidth <= clientWidth + 4 || !maxScroll) {
-        element.scrollLeft = 0;
-        return;
-      }
-
-      const activeRect = activeTab.getBoundingClientRect();
-      const currentScroll = Number(element.scrollLeft) || 0;
-      const targetScroll = currentScroll + activeRect.left - rect.left - (clientWidth - activeRect.width) / 2;
-      element.scrollLeft = clampNumber(targetScroll, 0, maxScroll);
+      element.scrollLeft = 0;
     } catch (_error) {
       // Some Home Assistant internals expose read-only scroll positions.
     }
   };
 
-  syncScroll(group);
-  if (group.shadowRoot) {
+  const resetAll = () => {
+    resetScroll(group);
+    if (!group.shadowRoot) return;
     for (const element of collectComposedElements(
       group.shadowRoot,
       ".tab-group, .nav-container, .nav, .tabs, [part~='base'], [part~='nav'], [part~='tabs'], [class*='scroll'], [id*='scroll']"
     )) {
-      syncScroll(element);
+      resetScroll(element);
     }
-  }
+  };
+
+  if (state.anchoredTabGroups.has(group)) return;
+
+  state.anchoredTabGroups.add(group);
+  resetAll();
+  window.requestAnimationFrame(resetAll);
+  window.setTimeout(resetAll, 80);
+  window.setTimeout(resetAll, 250);
 }
 
 function elementCenterY(element) {
@@ -2411,6 +2402,9 @@ function syncNavigationControls(header, controlSizeValue, iconSizeValue) {
       overflowX: "auto",
       overflowY: "hidden",
       scrollbarWidth: "none",
+      scrollBehavior: "auto",
+      scrollSnapType: "none",
+      scrollPaddingInline: "0",
       touchAction: "pan-x",
       transform: "none",
       translate: "0 0"
