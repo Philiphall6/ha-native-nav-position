@@ -1,4 +1,4 @@
-const VERSION = "1.0.2";
+const VERSION = "1.0.3";
 const TAG_NAME = "ha-native-nav-position";
 const STYLE_ID = "ha-native-nav-position-style";
 const NAV_ATTR = "data-ha-native-nav-position-active";
@@ -28,6 +28,7 @@ const BUTTON_SHADOW_HOSTS = new Set([
 ]);
 const TAB_SELECTOR = "ha-tab-group-tab, paper-tab, mwc-tab, md-primary-tab, md-secondary-tab";
 const TAB_GROUP_SELECTOR = "ha-tab-group, ha-tabs, paper-tabs, mwc-tab-bar, [role='tablist']";
+const TOOLBAR_CONTAINER_SELECTOR = ".toolbar, app-toolbar, ha-tabs";
 const SIDE_BUTTON_SELECTOR = "ha-menu-button, ha-icon-button, app-toolbar > ha-menu-button, app-toolbar > ha-icon-button";
 const ICON_SELECTOR = "ha-icon, ha-svg-icon, wa-icon, mwc-icon, md-icon, iron-icon, svg, .ha-icon, .icon";
 const TAB_INTERNAL_SELECTOR = [
@@ -855,6 +856,11 @@ function buildTabGroupShadowCss(config) {
       height: ${controlSize} !important;
       min-height: ${controlSize} !important;
       max-height: ${controlSize} !important;
+      padding: 0 !important;
+      padding-top: 0 !important;
+      padding-bottom: 0 !important;
+      padding-block: 0 !important;
+      margin: 0 !important;
       overflow-x: auto !important;
       overflow-y: hidden !important;
       touch-action: pan-x !important;
@@ -874,8 +880,48 @@ function buildTabGroupShadowCss(config) {
       outline: 0 !important;
       transform: none !important;
       translate: 0 0 !important;
+      position: relative !important;
+      top: 0 !important;
+      bottom: auto !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: flex-start !important;
       box-sizing: border-box !important;
       scrollbar-width: none !important;
+    }
+
+    slot[name="nav"],
+    slot:not([name]) {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: flex-start !important;
+      height: ${controlSize} !important;
+      min-height: ${controlSize} !important;
+      max-height: ${controlSize} !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      transform: none !important;
+      translate: 0 0 !important;
+      overflow: visible !important;
+    }
+
+    slot[name="nav"]::slotted(ha-tab-group-tab),
+    slot:not([name])::slotted(ha-tab-group-tab),
+    slot[name="nav"]::slotted(paper-tab),
+    slot:not([name])::slotted(paper-tab),
+    slot[name="nav"]::slotted(mwc-tab),
+    slot:not([name])::slotted(mwc-tab),
+    slot[name="nav"]::slotted(md-primary-tab),
+    slot:not([name])::slotted(md-primary-tab),
+    slot[name="nav"]::slotted(md-secondary-tab),
+    slot:not([name])::slotted(md-secondary-tab) {
+      align-self: center !important;
+      margin-top: 0 !important;
+      margin-bottom: 0 !important;
+      top: 0 !important;
+      bottom: auto !important;
+      transform: none !important;
+      translate: 0 0 !important;
     }
 
     :host::before,
@@ -1163,12 +1209,22 @@ function buildHeaderCss(config) {
     ? `
       height: ${config.height} !important;
       min-height: ${config.height} !important;
+      max-height: ${config.height} !important;
       padding: 0 10px !important;
+      padding-top: 0 !important;
+      padding-bottom: 0 !important;
+      padding-block: 0 !important;
+      margin: 0 !important;
       background: transparent !important;
       border: 0 !important;
       box-shadow: none !important;
+      display: flex !important;
       align-items: center !important;
       justify-content: center !important;
+      box-sizing: border-box !important;
+      overflow: hidden !important;
+      transform: none !important;
+      translate: 0 0 !important;
     `
     : `
       min-height: ${config.height} !important;
@@ -1176,6 +1232,14 @@ function buildHeaderCss(config) {
 
   const sideButtonCss = `
     ${headerSelector} .toolbar {
+      height: ${config.height} !important;
+      min-height: ${config.height} !important;
+      max-height: ${config.height} !important;
+      padding: 0 10px !important;
+      padding-top: 0 !important;
+      padding-bottom: 0 !important;
+      padding-block: 0 !important;
+      margin: 0 !important;
       background: transparent !important;
       border: 0 !important;
       border-top: 0 !important;
@@ -1186,6 +1250,13 @@ function buildHeaderCss(config) {
       border-inline: 0 !important;
       box-shadow: none !important;
       outline: 0 !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      box-sizing: border-box !important;
+      overflow: hidden !important;
+      transform: none !important;
+      translate: 0 0 !important;
     }
 
     ${headerSelector}::before,
@@ -1712,10 +1783,88 @@ function syncSideButton(button, controlSize, iconSize, radius) {
   syncIconsInRoot(button, iconSize, color);
 }
 
+function syncToolbarContainer(container) {
+  setInlineStyles(container, {
+    height: state.config.height,
+    minHeight: state.config.height,
+    maxHeight: state.config.height,
+    padding: "0 10px",
+    paddingTop: "0",
+    paddingBottom: "0",
+    paddingBlock: "0",
+    margin: "0",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    boxSizing: "border-box",
+    overflow: "hidden",
+    background: "transparent",
+    border: "0",
+    borderBottom: "0",
+    boxShadow: "none",
+    outline: "0",
+    transform: "none",
+    translate: "0 0"
+  });
+}
+
+function syncTabGroupInternals(group, controlSize) {
+  const root = group.shadowRoot;
+  if (!root) return;
+
+  const elements = collectComposedElements(
+    root,
+    ".tab-group, .tab-group-top, .tab-group-bottom, .nav-container, .nav, .tabs, [part~='base'], [part~='nav'], [part~='tabs'], slot[name='nav'], slot:not([name])"
+  );
+
+  for (const element of elements) {
+    setInlineStyles(element, {
+      height: controlSize,
+      minHeight: controlSize,
+      maxHeight: controlSize,
+      padding: "0",
+      paddingTop: "0",
+      paddingBottom: "0",
+      paddingBlock: "0",
+      margin: "0",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "flex-start",
+      boxSizing: "border-box",
+      overflowX: element.localName === "slot" ? "visible" : "auto",
+      overflowY: element.localName === "slot" ? "visible" : "hidden",
+      position: "relative",
+      top: "0",
+      bottom: "auto",
+      transform: "none",
+      translate: "0 0",
+      scrollbarWidth: "none"
+    });
+  }
+
+  collectAssignedSlotElements(root).forEach((element) => {
+    if (element.matches?.(TAB_SELECTOR)) {
+      setInlineStyles(element, {
+        alignSelf: "center",
+        marginTop: "0",
+        marginBottom: "0",
+        top: "0",
+        bottom: "auto",
+        transform: "none",
+        translate: "0 0"
+      });
+    }
+  });
+}
+
 function syncNavigationControls(header, controlSizeValue, iconSizeValue) {
   const controlSize = `${controlSizeValue}px`;
   const iconSize = `${iconSizeValue}px`;
   const radius = `${Math.round(controlSizeValue / 2)}px`;
+
+  for (const container of header.querySelectorAll(TOOLBAR_CONTAINER_SELECTOR)) {
+    syncToolbarContainer(container);
+  }
 
   for (const group of header.querySelectorAll(TAB_GROUP_SELECTOR)) {
     setInlineStyles(group, {
@@ -1730,6 +1879,7 @@ function syncNavigationControls(header, controlSizeValue, iconSizeValue) {
       transform: "none",
       translate: "0 0"
     });
+    syncTabGroupInternals(group, controlSize);
   }
 
   for (const button of header.querySelectorAll(SIDE_BUTTON_SELECTOR)) {
