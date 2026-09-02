@@ -1,4 +1,4 @@
-const VERSION = "1.0.7";
+const VERSION = "1.0.8";
 const TAG_NAME = "ha-native-nav-position";
 const STYLE_ID = "ha-native-nav-position-style";
 const NAV_ATTR = "data-ha-native-nav-position-active";
@@ -33,7 +33,6 @@ const BUTTON_SHADOW_HOSTS = new Set([
 const TAB_SELECTOR = "ha-tab-group-tab, paper-tab, mwc-tab, md-primary-tab, md-secondary-tab";
 const TAB_GROUP_SELECTOR = "ha-tab-group, ha-tabs, paper-tabs, mwc-tab-bar, [role='tablist']";
 const DOCK_TOOLBAR_CLASS = "ha-native-nav-position-toolbar";
-const MIN_COMPACT_TAB_CONTROL_SIZE = 34;
 const TOOLBAR_CONTAINER_SELECTOR = `.toolbar, app-toolbar, ha-tabs, .${DOCK_TOOLBAR_CLASS}`;
 const DOCK_ALIGN_SELECTOR = "ha-menu-button, ha-icon-button, ha-button-menu, ha-tab-group, ha-tabs, paper-tabs, mwc-tab-bar, [role='tablist']";
 const SIDE_BUTTON_SELECTOR = "ha-menu-button, ha-icon-button, ha-button-menu, app-toolbar > ha-menu-button, app-toolbar > ha-icon-button, app-toolbar > ha-button-menu";
@@ -2120,7 +2119,7 @@ function ensureFallbackTabIcon(tab, index, iconSize, color) {
   styleIconElement(icon, iconSize, color);
 }
 
-function syncTabControl(tab, controlSize, iconSize, radius, index = 0, margin = "0 1px") {
+function syncTabControl(tab, controlSize, iconSize, radius, index = 0, margin = "0") {
   const active = isActiveTab(tab);
   const color = active ? state.config.active_color : state.config.inactive_color;
 
@@ -2240,7 +2239,7 @@ function syncToolbarContainer(container) {
   });
 }
 
-function syncTabGroupInternals(group, controlSize) {
+function syncTabGroupInternals(group, controlSize, shouldCenter = false) {
   const root = group.shadowRoot;
   if (!root) return;
 
@@ -2261,7 +2260,7 @@ function syncTabGroupInternals(group, controlSize) {
       margin: "0",
       display: "flex",
       alignItems: "center",
-      justifyContent: "flex-start",
+      justifyContent: shouldCenter ? "center" : "flex-start",
       boxSizing: "border-box",
       overflowX: element.localName === "slot" ? "visible" : "auto",
       overflowY: element.localName === "slot" ? "visible" : "hidden",
@@ -2302,25 +2301,36 @@ function syncTabGroupScroll(group) {
     const width = Number.isFinite(rect.width) && rect.width > 0 ? rect.width : 48;
     return sum + width + marginLeft + marginRight;
   }, 0);
+  const activeTab = tabs.find(isActiveTab) || tabs[0];
 
-  if (totalWidth > groupRect.width + 4) return;
-
-  const resetScroll = (element) => {
+  const syncScroll = (element) => {
     if (!element) return;
     try {
-      element.scrollLeft = 0;
+      const rect = element.getBoundingClientRect?.() || groupRect;
+      const clientWidth = element.clientWidth || rect.width || groupRect.width;
+      const scrollWidth = Math.max(element.scrollWidth || 0, totalWidth);
+      const maxScroll = Math.max(0, scrollWidth - clientWidth);
+      if (totalWidth <= clientWidth + 4 || !maxScroll) {
+        element.scrollLeft = 0;
+        return;
+      }
+
+      const activeRect = activeTab.getBoundingClientRect();
+      const currentScroll = Number(element.scrollLeft) || 0;
+      const targetScroll = currentScroll + activeRect.left - rect.left - (clientWidth - activeRect.width) / 2;
+      element.scrollLeft = clampNumber(targetScroll, 0, maxScroll);
     } catch (_error) {
       // Some Home Assistant internals expose read-only scroll positions.
     }
   };
 
-  resetScroll(group);
+  syncScroll(group);
   if (group.shadowRoot) {
     for (const element of collectComposedElements(
       group.shadowRoot,
       ".tab-group, .nav-container, .nav, .tabs, [part~='base'], [part~='nav'], [part~='tabs'], [class*='scroll'], [id*='scroll']"
     )) {
-      resetScroll(element);
+      syncScroll(element);
     }
   }
 }
@@ -2361,32 +2371,18 @@ function topLevelDockControls(navRoot) {
 function syncDockContentAlignment(navRoot) {
   if (!state.config.dock) return;
 
-  const target = elementCenterY(navRoot);
-  if (target === null) return;
-
   for (const control of topLevelDockControls(navRoot)) {
-    const current = visualCenterY(control);
-    if (current === null) continue;
-
-    const shift = clampNumber(target - current, -96, 96);
-    const transform = Math.abs(shift) < 0.5 ? "none" : `translateY(${shift.toFixed(2)}px)`;
     setInlineStyles(control, {
-      transform,
+      alignSelf: "center",
+      transform: "none",
       translate: "0 0",
-      willChange: "transform"
+      willChange: "auto"
     });
   }
 }
 
 function tabControlSizeForGroup(group, controlSizeValue) {
-  const tabs = Array.from(group.querySelectorAll(TAB_SELECTOR));
-  if (!tabs.length) return controlSizeValue;
-
-  const rect = group.getBoundingClientRect();
-  if (!Number.isFinite(rect.width) || rect.width <= 0) return controlSizeValue;
-
-  const fitted = Math.floor(rect.width / tabs.length);
-  return clampNumber(Math.min(controlSizeValue, fitted), MIN_COMPACT_TAB_CONTROL_SIZE, controlSizeValue);
+  return controlSizeValue;
 }
 
 function syncNavigationControls(header, controlSizeValue, iconSizeValue) {
@@ -2409,6 +2405,9 @@ function syncNavigationControls(header, controlSizeValue, iconSizeValue) {
       width: "100%",
       height: controlSize,
       minHeight: controlSize,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "flex-start",
       overflowX: "auto",
       overflowY: "hidden",
       scrollbarWidth: "none",
@@ -2416,12 +2415,20 @@ function syncNavigationControls(header, controlSizeValue, iconSizeValue) {
       transform: "none",
       translate: "0 0"
     });
-    syncTabGroupInternals(group, controlSize);
 
-    Array.from(group.querySelectorAll(TAB_SELECTOR)).forEach((tab, index) => {
-      syncTabControl(tab, tabControlSize, iconSize, tabRadius, index, tabControlSizeValue < controlSizeValue ? "0" : "0 1px");
+    const tabs = Array.from(group.querySelectorAll(TAB_SELECTOR));
+    tabs.forEach((tab, index) => {
+      syncTabControl(tab, tabControlSize, iconSize, tabRadius, index);
       styledTabs.add(tab);
     });
+    const groupRect = group.getBoundingClientRect();
+    const totalTabWidth = tabs.reduce((sum, tab) => {
+      const rect = tab.getBoundingClientRect();
+      return sum + (Number.isFinite(rect.width) && rect.width > 0 ? rect.width : controlSizeValue);
+    }, 0);
+    const shouldCenter = Number.isFinite(groupRect.width) && totalTabWidth <= groupRect.width + 4;
+    setInlineStyles(group, { justifyContent: shouldCenter ? "center" : "flex-start" });
+    syncTabGroupInternals(group, controlSize, shouldCenter);
     syncTabGroupScroll(group);
   }
 
