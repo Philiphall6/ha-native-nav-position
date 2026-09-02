@@ -1,22 +1,28 @@
-const VERSION = "1.0.10";
+const VERSION = "1.0.0";
 const TAG_NAME = "ha-native-nav-position";
-const STYLE_ID = "ha-native-nav-position-style";
+const STYLE_ID = "ha-native-nav-position-style-current";
 const NAV_ATTR = "data-ha-native-nav-position-active";
-const DOCK_ATTR = "data-ha-native-nav-position-dock";
-const SOURCE_ATTR = "data-ha-native-nav-position-source";
-const INLINE_ATTR = "data-ha-native-nav-position-inline";
-const FALLBACK_ICON_ATTR = "data-ha-native-nav-position-fallback-icon";
+const NAV_PART_ATTR = "data-ha-native-nav-position-part";
 const CONTROL_SIZE_VAR = "--ha-native-nav-control-size";
 const ICON_SIZE_VAR = "--ha-native-nav-icon-size";
 const TAB_Y_OFFSET_VAR = "--ha-native-nav-tab-y-offset";
+const ICON_Y_OFFSET_VAR = "--ha-native-nav-icon-y-offset";
+const VIEW_ICON_Y_OFFSET_VAR = "--ha-native-nav-view-icon-y-offset";
+const CONTENT_Y_OFFSET_VAR = "--ha-native-nav-content-y-offset";
+const MENU_Y_OFFSET_VAR = "--ha-native-nav-menu-y-offset";
+const IOS_VIEW_Y_OFFSET = "0px";
 const TAB_SHADOW_HOSTS = new Set([
   "ha-tab-group-tab",
+  "sl-tab",
+  "wa-tab",
   "mwc-tab",
   "md-primary-tab",
   "md-secondary-tab"
 ]);
 const TAB_GROUP_SHADOW_HOSTS = new Set([
   "ha-tab-group",
+  "sl-tab-group",
+  "wa-tab-group",
   "ha-tabs",
   "paper-tabs",
   "mwc-tab-bar"
@@ -30,35 +36,17 @@ const BUTTON_SHADOW_HOSTS = new Set([
   "md-icon-button",
   "wa-button"
 ]);
-const TAB_SELECTOR = "ha-tab-group-tab, paper-tab, mwc-tab, md-primary-tab, md-secondary-tab";
-const TAB_GROUP_SELECTOR = "ha-tab-group, ha-tabs, paper-tabs, mwc-tab-bar, [role='tablist']";
-const DOCK_TOOLBAR_CLASS = "ha-native-nav-position-toolbar";
-const ICON_HOST_SELECTOR = "ha-icon, ha-svg-icon, wa-icon, mwc-icon, md-icon, iron-icon";
-const TOOLBAR_CONTAINER_SELECTOR = `.toolbar, app-toolbar, ha-tabs, .${DOCK_TOOLBAR_CLASS}`;
-const DOCK_ALIGN_SELECTOR = "ha-menu-button, ha-icon-button, ha-button-menu, ha-tab-group, ha-tabs, paper-tabs, mwc-tab-bar, [role='tablist']";
-const SIDE_BUTTON_SELECTOR = "ha-menu-button, ha-icon-button, ha-button-menu, app-toolbar > ha-menu-button, app-toolbar > ha-icon-button, app-toolbar > ha-button-menu";
-const ICON_SELECTOR = "ha-icon, ha-svg-icon, wa-icon, mwc-icon, md-icon, iron-icon, svg, .ha-icon, .icon";
-const TAB_INTERNAL_SELECTOR = [
-  ".tab",
-  ".tab-active",
-  ".mdc-tab",
-  ".mdc-tab--active",
-  "button",
-  "[part~='tab']",
-  "[part~='base']",
-  "[part~='content']",
-  ".mdc-tab__content"
-].join(", ");
-const LABEL_SELECTOR = [
-  ".label",
-  "[part~='label']",
-  ".mdc-tab__content span",
-  "slot",
-  "slot[name='icon']",
-  "slot[name='prefix']",
-  "slot[name='start']"
-].join(", ");
-const TEXT_LABEL_SELECTOR = ".mdc-tab__text-label";
+const ICON_SHADOW_HOSTS = new Set([
+  "ha-icon",
+  "ha-svg-icon",
+  "wa-icon",
+  "mwc-icon",
+  "md-icon",
+  "iron-icon"
+]);
+const VIEW_TAB_SELECTOR = "ha-tab-group-tab, sl-tab, wa-tab, paper-tab, mwc-tab, md-primary-tab, md-secondary-tab";
+const DOCK_CONTENT_ICON_SELECTOR = "ha-icon, ha-svg-icon, wa-icon, mwc-icon, md-icon, iron-icon, svg, .ha-icon, .icon, .mdc-icon-button__icon";
+const SVG_GRAPHIC_SELECTOR = "path, g, rect, circle, ellipse, line, polyline, polygon, use";
 const NON_DASHBOARD_PREFIXES = [
   "/config",
   "/developer-tools",
@@ -78,7 +66,8 @@ const NON_DASHBOARD_PREFIXES = [
 const DEFAULT_CONFIG = {
   enabled: true,
   position: "bottom",
-  mobile_only: true,
+  only: "all",
+  mobile_only: false,
   mobile_max_width: "768px",
   dock: true,
   hide_labels: true,
@@ -88,6 +77,12 @@ const DEFAULT_CONFIG = {
   radius: "30px",
   side_gap: "12px",
   tab_y_offset: "0px",
+  ios_content_y_offset: "-24px",
+  ios_menu_y_offset: "-16px",
+  ios_menu_icon_y_offset: "-4px",
+  ios_icon_y_offset: "0px",
+  ios_view_icon_y_offset: "0px",
+  ios_bottom_offset: "8px",
   bottom_padding: "128px",
   top_padding: "88px",
   background: "rgba(35, 48, 64, 0.54)",
@@ -102,13 +97,8 @@ const DEFAULT_CONFIG = {
 const state = {
   config: { ...DEFAULT_CONFIG },
   observers: new WeakMap(),
-  inlineStyles: new WeakMap(),
-  inlineElements: new Set(),
-  docks: new WeakMap(),
-  dockHeaders: new Set(),
-  movedElements: new WeakMap(),
-  generatedIcons: new Set(),
-  anchoredTabGroups: new WeakSet(),
+  tabScrollHandlers: new WeakMap(),
+  actionMenuRecords: new WeakMap(),
   applyTimer: 0,
   started: false
 };
@@ -134,6 +124,57 @@ const safeText = (value, fallback) => {
   return String(value);
 };
 
+function addCssSize(base, delta) {
+  const deltaText = String(delta || "0px").trim();
+  if (!deltaText || deltaText === "0" || deltaText === "0px") return base;
+  if (deltaText.startsWith("-")) return `calc(${base} - ${deltaText.slice(1)})`;
+  return `calc(${base} + ${deltaText})`;
+}
+
+function isIOSLike() {
+  const nav = window.navigator || {};
+  const userAgent = nav.userAgent || "";
+  const platform = nav.platform || "";
+  const touchCallout =
+    typeof window.CSS?.supports === "function" &&
+    window.CSS.supports("-webkit-touch-callout", "none");
+  return (
+    /iPad|iPhone|iPod/i.test(userAgent) ||
+    (platform === "MacIntel" && Number(nav.maxTouchPoints) > 1) ||
+    touchCallout
+  );
+}
+
+function normalizeOnly(value, legacyMobileOnly) {
+  const text = String(value ?? "").trim().toLowerCase().replace(/_/g, "-");
+  if (["mobile", "phone", "ios", "android"].includes(text)) return "mobile";
+  if (["web", "desktop", "large"].includes(text)) return "web";
+  if (["all", "both", "everywhere", "always", ""].includes(text)) {
+    return legacyMobileOnly ? "mobile" : "all";
+  }
+  return legacyMobileOnly ? "mobile" : "all";
+}
+
+function scopeCss(config, css) {
+  if (config.only === "mobile" || config.mobile_only) {
+    return `
+      @media (max-width: ${config.mobile_max_width}) {
+        ${css}
+      }
+    `;
+  }
+
+  if (config.only === "web") {
+    return `
+      @media (min-width: ${config.mobile_max_width}) {
+        ${css}
+      }
+    `;
+  }
+
+  return css;
+}
+
 function readUrlConfig() {
   let url;
   try {
@@ -156,7 +197,8 @@ function normalizeConfig(input = {}) {
 
   normalized.enabled = toBool(merged.enabled, DEFAULT_CONFIG.enabled);
   normalized.position = String(merged.position || DEFAULT_CONFIG.position).toLowerCase() === "top" ? "top" : "bottom";
-  normalized.mobile_only = toBool(merged.mobile_only ?? merged.mobileOnly, DEFAULT_CONFIG.mobile_only);
+  normalized.only = normalizeOnly(merged.only, toBool(merged.mobile_only ?? merged.mobileOnly, DEFAULT_CONFIG.mobile_only));
+  normalized.mobile_only = normalized.only === "mobile";
   normalized.dock = toBool(merged.dock, DEFAULT_CONFIG.dock);
   normalized.hide_labels = toBool(merged.hide_labels ?? merged.hideLabels, DEFAULT_CONFIG.hide_labels);
   normalized.compact = toBool(merged.compact, DEFAULT_CONFIG.compact);
@@ -166,6 +208,30 @@ function normalizeConfig(input = {}) {
   normalized.radius = toCssSize(merged.radius, DEFAULT_CONFIG.radius);
   normalized.side_gap = toCssSize(merged.side_gap ?? merged.sideGap, DEFAULT_CONFIG.side_gap);
   normalized.tab_y_offset = toCssSize(merged.tab_y_offset ?? merged.tabYOffset, DEFAULT_CONFIG.tab_y_offset);
+  normalized.ios_content_y_offset = toCssSize(
+    merged.ios_content_y_offset ?? merged.iosContentYOffset,
+    DEFAULT_CONFIG.ios_content_y_offset
+  );
+  normalized.ios_menu_y_offset = toCssSize(
+    merged.ios_menu_y_offset ?? merged.iosMenuYOffset,
+    DEFAULT_CONFIG.ios_menu_y_offset
+  );
+  normalized.ios_menu_icon_y_offset = toCssSize(
+    merged.ios_menu_icon_y_offset ?? merged.iosMenuIconYOffset,
+    DEFAULT_CONFIG.ios_menu_icon_y_offset
+  );
+  normalized.ios_icon_y_offset = toCssSize(
+    merged.ios_icon_y_offset ?? merged.iosIconYOffset,
+    DEFAULT_CONFIG.ios_icon_y_offset
+  );
+  normalized.ios_view_icon_y_offset = toCssSize(
+    merged.ios_view_icon_y_offset ?? merged.iosViewIconYOffset,
+    DEFAULT_CONFIG.ios_view_icon_y_offset
+  );
+  normalized.ios_bottom_offset = toCssSize(
+    merged.ios_bottom_offset ?? merged.iosBottomOffset,
+    DEFAULT_CONFIG.ios_bottom_offset
+  );
   normalized.bottom_padding = toCssSize(merged.bottom_padding ?? merged.bottomPadding, DEFAULT_CONFIG.bottom_padding);
   normalized.top_padding = toCssSize(merged.top_padding ?? merged.topPadding, DEFAULT_CONFIG.top_padding);
   normalized.background = safeText(merged.background, DEFAULT_CONFIG.background);
@@ -190,26 +256,45 @@ function buildTabCss(config) {
   const headerSelector = `.header[${NAV_ATTR}]`;
 
   return `
-    ${headerSelector} ha-tab-group {
+    ${headerSelector} ha-tab-group,
+    ${headerSelector} sl-tab-group,
+    ${headerSelector} wa-tab-group {
       --mdc-tab-height: ${controlSize} !important;
       --mdc-tab-indicator-active-indicator-height: 0 !important;
       --mdc-tab-indicator-active-indicator-color: transparent !important;
       --md-primary-tab-container-height: ${controlSize} !important;
       --md-primary-tab-active-indicator-height: 0 !important;
       --md-primary-tab-active-indicator-color: transparent !important;
+      --sl-spacing-large: 0px !important;
+      --ha-tab-padding-start: 0px !important;
+      --ha-tab-padding-end: 0px !important;
+      flex: 1 1 auto !important;
       min-width: 0 !important;
       width: 100% !important;
+      max-width: 100% !important;
+      height: ${controlSize} !important;
+      min-height: ${controlSize} !important;
+      max-height: ${controlSize} !important;
+      align-self: center !important;
       position: relative !important;
-      top: ${tabYOffset} !important;
+      top: calc(${tabYOffset} + var(${CONTENT_Y_OFFSET_VAR}, 0px)) !important;
       transform: none !important;
       translate: 0 0 !important;
       overflow-x: auto !important;
       overflow-y: hidden !important;
       touch-action: pan-x !important;
+      overscroll-behavior-x: contain !important;
+      -webkit-overflow-scrolling: touch !important;
+      pointer-events: auto !important;
+      scroll-behavior: auto !important;
+      scroll-snap-type: none !important;
+      scroll-padding-inline: 0 !important;
       scrollbar-width: none !important;
     }
 
-    ${headerSelector} ha-tab-group::-webkit-scrollbar {
+    ${headerSelector} ha-tab-group::-webkit-scrollbar,
+    ${headerSelector} sl-tab-group::-webkit-scrollbar,
+    ${headerSelector} wa-tab-group::-webkit-scrollbar {
       display: none !important;
       width: 0 !important;
       height: 0 !important;
@@ -250,7 +335,7 @@ function buildTabCss(config) {
       border-inline: 0 !important;
       border-color: transparent !important;
       border-radius: ${controlRadius} !important;
-      overflow: visible !important;
+      overflow: hidden !important;
       position: relative !important;
       inset: auto !important;
       color: ${config.inactive_color} !important;
@@ -262,10 +347,13 @@ function buildTabCss(config) {
       translate: 0 0 !important;
       transition: color 140ms ease, opacity 140ms ease !important;
       touch-action: pan-x !important;
+      overscroll-behavior-x: contain !important;
+      scroll-snap-align: none !important;
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
       box-sizing: border-box !important;
+      line-height: 0 !important;
     }
 
     ${headerSelector} ha-tab-group-tab[active],
@@ -290,7 +378,6 @@ function buildTabCss(config) {
     }
 
     ${headerSelector} ha-tab-group-tab::part(base),
-    ${headerSelector} ha-tab-group-tab::part(tab),
     ${headerSelector} ha-tab-group-tab[class~="icon-only"]::part(base) {
       width: ${controlSize} !important;
       min-width: ${controlSize} !important;
@@ -319,18 +406,15 @@ function buildTabCss(config) {
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
+      overflow: hidden !important;
+      line-height: 0 !important;
     }
 
     ${headerSelector} ha-tab-group-tab[active]::part(base),
-    ${headerSelector} ha-tab-group-tab[active]::part(tab),
     ${headerSelector} ha-tab-group-tab[aria-selected="true"]::part(base),
-    ${headerSelector} ha-tab-group-tab[aria-selected="true"]::part(tab),
     ${headerSelector} ha-tab-group-tab[aria-current="page"]::part(base),
-    ${headerSelector} ha-tab-group-tab[aria-current="page"]::part(tab),
     ${headerSelector} ha-tab-group-tab[selected]::part(base),
-    ${headerSelector} ha-tab-group-tab[selected]::part(tab),
     ${headerSelector} ha-tab-group-tab.active::part(base),
-    ${headerSelector} ha-tab-group-tab.active::part(tab),
     ${headerSelector} ha-tab-group-tab.iron-selected::part(base) {
       background: ${config.active_background} !important;
       border: 0 !important;
@@ -350,7 +434,8 @@ function buildTabCss(config) {
     }
 
     ${headerSelector} ha-tab-group-tab .mdc-tab__content span,
-    ${headerSelector} ha-tab-group-tab .label {
+    ${headerSelector} ha-tab-group-tab .label,
+    ${headerSelector} ha-tab-group-tab [part~="label"] {
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
@@ -364,6 +449,8 @@ function buildTabCss(config) {
       background: transparent !important;
       border: 0 !important;
       box-shadow: none !important;
+      overflow: hidden !important;
+      box-sizing: border-box !important;
     }
 
     ${headerSelector} ha-tab-group-tab .mdc-tab,
@@ -374,6 +461,8 @@ function buildTabCss(config) {
     ${headerSelector} ha-tab-group-tab [part~="content"] {
       width: 100% !important;
       height: ${controlSize} !important;
+      min-height: ${controlSize} !important;
+      max-height: ${controlSize} !important;
       padding: 0 !important;
       margin: 0 !important;
       border-radius: ${controlRadius} !important;
@@ -392,6 +481,8 @@ function buildTabCss(config) {
       align-items: center !important;
       justify-content: center !important;
       box-sizing: border-box !important;
+      overflow: hidden !important;
+      line-height: 0 !important;
     }
 
     ${headerSelector} ha-tab-group-tab ha-icon,
@@ -407,9 +498,14 @@ function buildTabCss(config) {
       min-height: ${iconSize} !important;
       margin: 0 !important;
       display: block !important;
+      position: static !important;
+      top: auto !important;
+      left: auto !important;
+      right: auto !important;
+      bottom: auto !important;
       color: inherit !important;
       line-height: 1 !important;
-      transform: none !important;
+      transform: translateY(var(${VIEW_ICON_Y_OFFSET_VAR}, 0px)) !important;
       translate: 0 0 !important;
       transition: color 140ms ease, opacity 140ms ease !important;
       pointer-events: none !important;
@@ -418,9 +514,15 @@ function buildTabCss(config) {
     ${headerSelector} ha-tab-group-tab .mdc-tab__content span > ha-icon,
     ${headerSelector} ha-tab-group-tab .mdc-tab__content span > ha-svg-icon,
     ${headerSelector} ha-tab-group-tab .mdc-tab__content span > svg,
+    ${headerSelector} ha-tab-group-tab .mdc-tab__text-label > ha-icon,
+    ${headerSelector} ha-tab-group-tab .mdc-tab__text-label > ha-svg-icon,
+    ${headerSelector} ha-tab-group-tab .mdc-tab__text-label > svg,
     ${headerSelector} ha-tab-group-tab .label > ha-icon,
     ${headerSelector} ha-tab-group-tab .label > ha-svg-icon,
-    ${headerSelector} ha-tab-group-tab .label > svg {
+    ${headerSelector} ha-tab-group-tab .label > svg,
+    ${headerSelector} ha-tab-group-tab [part~="label"] > ha-icon,
+    ${headerSelector} ha-tab-group-tab [part~="label"] > ha-svg-icon,
+    ${headerSelector} ha-tab-group-tab [part~="label"] > svg {
       --mdc-icon-size: ${iconSize} !important;
       width: ${iconSize} !important;
       height: ${iconSize} !important;
@@ -434,6 +536,14 @@ function buildTabCss(config) {
       stroke: currentColor !important;
       font-size: ${iconSize} !important;
       line-height: 1 !important;
+      margin: 0 !important;
+      position: static !important;
+      top: auto !important;
+      left: auto !important;
+      right: auto !important;
+      bottom: auto !important;
+      transform: translateY(var(${VIEW_ICON_Y_OFFSET_VAR}, 0px)) !important;
+      translate: 0 0 !important;
     }
 
     ${headerSelector} ha-tab-group-tab[active] ha-icon,
@@ -494,9 +604,85 @@ function buildTabCss(config) {
       background: transparent !important;
       box-shadow: none !important;
     }
-  `;
 
-  return `${css}\n${css.replaceAll(headerSelector, `[${DOCK_ATTR}]`)}`;
+    ${headerSelector} sl-tab,
+    ${headerSelector} wa-tab {
+      --sl-spacing-large: 0px !important;
+      flex: 0 0 ${controlSize} !important;
+      width: ${controlSize} !important;
+      min-width: ${controlSize} !important;
+      max-width: ${controlSize} !important;
+      height: ${controlSize} !important;
+      min-height: ${controlSize} !important;
+      max-height: ${controlSize} !important;
+      padding: 0 !important;
+      margin: 0 1px !important;
+      color: ${config.inactive_color} !important;
+      opacity: 0.82 !important;
+      background: transparent !important;
+      border: 0 !important;
+      box-shadow: none !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      box-sizing: border-box !important;
+    }
+
+    ${headerSelector} sl-tab[active],
+    ${headerSelector} sl-tab[aria-selected="true"],
+    ${headerSelector} sl-tab[selected],
+    ${headerSelector} wa-tab[active],
+    ${headerSelector} wa-tab[aria-selected="true"],
+    ${headerSelector} wa-tab[selected] {
+      color: ${config.active_color} !important;
+      opacity: 1 !important;
+    }
+
+    ${headerSelector} sl-tab::part(base),
+    ${headerSelector} wa-tab::part(base) {
+      width: ${controlSize} !important;
+      min-width: ${controlSize} !important;
+      height: ${controlSize} !important;
+      min-height: ${controlSize} !important;
+      padding: 0 !important;
+      background: transparent !important;
+      border: 0 !important;
+      box-shadow: none !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+    }
+
+    ${headerSelector} sl-tab ha-icon,
+    ${headerSelector} sl-tab ha-svg-icon,
+    ${headerSelector} sl-tab wa-icon,
+    ${headerSelector} sl-tab svg,
+    ${headerSelector} wa-tab ha-icon,
+    ${headerSelector} wa-tab ha-svg-icon,
+    ${headerSelector} wa-tab wa-icon,
+    ${headerSelector} wa-tab svg {
+      --mdc-icon-size: ${iconSize} !important;
+      width: ${iconSize} !important;
+      height: ${iconSize} !important;
+      min-width: ${iconSize} !important;
+      min-height: ${iconSize} !important;
+      color: inherit !important;
+      fill: currentColor !important;
+      stroke: currentColor !important;
+      display: block !important;
+      font-size: ${iconSize} !important;
+      line-height: 1 !important;
+      margin: 0 !important;
+      position: static !important;
+      top: auto !important;
+      left: auto !important;
+      right: auto !important;
+      bottom: auto !important;
+      transform: translateY(var(${VIEW_ICON_Y_OFFSET_VAR}, 0px)) !important;
+      translate: 0 0 !important;
+      pointer-events: none !important;
+    }
+  `;
 }
 
 function buildTabShadowCss(config) {
@@ -543,8 +729,18 @@ function buildTabShadowCss(config) {
       border-color: transparent !important;
       box-shadow: none !important;
       outline: 0 !important;
+      width: ${controlSize} !important;
+      min-width: ${controlSize} !important;
+      max-width: ${controlSize} !important;
+      position: relative !important;
       transform: none !important;
       translate: 0 0 !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      overflow: hidden !important;
+      box-sizing: border-box !important;
+      line-height: 0 !important;
       transition: color 140ms ease, opacity 140ms ease !important;
     }
 
@@ -601,36 +797,12 @@ function buildTabShadowCss(config) {
       align-items: center !important;
       justify-content: center !important;
       box-sizing: border-box !important;
+      position: relative !important;
+      overflow: hidden !important;
+      line-height: 0 !important;
       transform: none !important;
       translate: 0 0 !important;
       transition: color 140ms ease, opacity 140ms ease !important;
-    }
-
-    [part~="tab"],
-    [part~="base"] {
-      width: 100% !important;
-      height: ${controlSize} !important;
-      min-height: ${controlSize} !important;
-      max-height: ${controlSize} !important;
-      padding: 0 !important;
-      margin: 0 !important;
-      border-radius: ${controlRadius} !important;
-      background: transparent !important;
-      background-image: none !important;
-      border: 0 !important;
-      border-block: 0 !important;
-      border-inline: 0 !important;
-      border-bottom-width: 0 !important;
-      border-bottom-color: transparent !important;
-      border-color: transparent !important;
-      box-shadow: none !important;
-      outline: 0 !important;
-      display: flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      box-sizing: border-box !important;
-      transform: none !important;
-      translate: 0 0 !important;
     }
 
     :host::before,
@@ -667,12 +839,17 @@ function buildTabShadowCss(config) {
       align-items: center !important;
       justify-content: center !important;
       box-sizing: border-box !important;
+      position: relative !important;
+      overflow: hidden !important;
+      line-height: 0 !important;
     }
 
     .mdc-tab__content,
     [part~="content"] {
       width: 100% !important;
       height: ${controlSize} !important;
+      min-height: ${controlSize} !important;
+      max-height: ${controlSize} !important;
       padding: 0 !important;
       margin: 0 !important;
       background: transparent !important;
@@ -682,6 +859,8 @@ function buildTabShadowCss(config) {
       align-items: center !important;
       justify-content: center !important;
       box-sizing: border-box !important;
+      overflow: hidden !important;
+      line-height: 0 !important;
     }
 
     .mdc-tab__text-label {
@@ -704,15 +883,16 @@ function buildTabShadowCss(config) {
       background: transparent !important;
       border: 0 !important;
       box-shadow: none !important;
-      overflow: visible !important;
+      overflow: hidden !important;
+      box-sizing: border-box !important;
     }
 
     ha-icon,
     ha-svg-icon,
     wa-icon,
+    svg,
     .ha-icon,
-    .icon,
-    slot[name="icon"] {
+    .icon {
       --mdc-icon-size: ${iconSize};
       width: ${iconSize} !important;
       height: ${iconSize} !important;
@@ -721,9 +901,25 @@ function buildTabShadowCss(config) {
       margin: 0 !important;
       color: inherit !important;
       line-height: 1 !important;
-      transform: none !important;
+      display: block !important;
+      box-sizing: border-box !important;
       translate: 0 0 !important;
       pointer-events: none !important;
+    }
+
+    ha-icon,
+    ha-svg-icon,
+    wa-icon,
+    svg,
+    .ha-icon,
+    .icon {
+      position: static !important;
+      top: auto !important;
+      left: auto !important;
+      right: auto !important;
+      bottom: auto !important;
+      margin: 0 !important;
+      transform: none !important;
     }
 
     slot,
@@ -740,6 +936,15 @@ function buildTabShadowCss(config) {
       color: inherit !important;
       font-size: 0 !important;
       line-height: 0 !important;
+      overflow: visible !important;
+      box-sizing: border-box !important;
+      position: absolute !important;
+      top: 50% !important;
+      left: 50% !important;
+      right: auto !important;
+      bottom: auto !important;
+      margin: 0 !important;
+      transform: translate(-50%, -50%) translateY(var(${VIEW_ICON_Y_OFFSET_VAR}, 0px)) !important;
     }
 
     slot::slotted(ha-icon),
@@ -756,11 +961,18 @@ function buildTabShadowCss(config) {
       display: block !important;
       visibility: visible !important;
       opacity: 1 !important;
+      box-sizing: border-box !important;
       color: inherit !important;
       fill: currentColor !important;
       stroke: currentColor !important;
       font-size: ${iconSize} !important;
       line-height: 1 !important;
+      position: static !important;
+      top: auto !important;
+      left: auto !important;
+      right: auto !important;
+      bottom: auto !important;
+      margin: 0 !important;
       transform: none !important;
       translate: 0 0 !important;
       pointer-events: none !important;
@@ -804,13 +1016,7 @@ function buildTabShadowCss(config) {
     }
   `;
 
-  if (!config.mobile_only) return css;
-
-  return `
-    @media (max-width: ${config.mobile_max_width}) {
-      ${css}
-    }
-  `;
+  return scopeCss(config, css);
 }
 
 function buildTabGroupShadowCss(config) {
@@ -828,11 +1034,20 @@ function buildTabGroupShadowCss(config) {
       --mdc-tab-indicator-active-indicator-color: transparent !important;
       --md-primary-tab-active-indicator-height: 0 !important;
       --md-primary-tab-active-indicator-color: transparent !important;
+      --sl-spacing-large: 0px !important;
+      --ha-tab-padding-start: 0px !important;
+      --ha-tab-padding-end: 0px !important;
       min-width: 0 !important;
       width: 100% !important;
       overflow-x: auto !important;
       overflow-y: hidden !important;
       touch-action: pan-x !important;
+      overscroll-behavior-x: contain !important;
+      -webkit-overflow-scrolling: touch !important;
+      pointer-events: auto !important;
+      scroll-behavior: auto !important;
+      scroll-snap-type: none !important;
+      scroll-padding-inline: 0 !important;
       border: 0 !important;
       border-top: 0 !important;
       border-right: 0 !important;
@@ -861,6 +1076,9 @@ function buildTabGroupShadowCss(config) {
     .tab-group,
     .tab-group-top,
     .tab-group-bottom,
+    .tab-group__base,
+    .tab-group__nav,
+    .tab-group__tabs,
     .nav-container,
     .nav,
     .tabs,
@@ -875,9 +1093,16 @@ function buildTabGroupShadowCss(config) {
       padding-bottom: 0 !important;
       padding-block: 0 !important;
       margin: 0 !important;
+      min-width: 0 !important;
+      max-width: 100% !important;
       overflow-x: auto !important;
       overflow-y: hidden !important;
       touch-action: pan-x !important;
+      overscroll-behavior-x: contain !important;
+      -webkit-overflow-scrolling: touch !important;
+      scroll-behavior: auto !important;
+      scroll-snap-type: none !important;
+      scroll-padding-inline: 0 !important;
       background: transparent !important;
       background-image: none !important;
       border: 0 !important;
@@ -904,11 +1129,28 @@ function buildTabGroupShadowCss(config) {
       scrollbar-width: none !important;
     }
 
+    .tab-group__body,
+    .body,
+    [part~="body"] {
+      display: none !important;
+      width: 0 !important;
+      height: 0 !important;
+      min-width: 0 !important;
+      min-height: 0 !important;
+      max-width: 0 !important;
+      max-height: 0 !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      overflow: hidden !important;
+    }
+
     slot[name="nav"],
     slot:not([name]) {
       display: flex !important;
       align-items: center !important;
       justify-content: flex-start !important;
+      min-width: max-content !important;
+      width: max-content !important;
       height: ${controlSize} !important;
       min-height: ${controlSize} !important;
       max-height: ${controlSize} !important;
@@ -917,6 +1159,7 @@ function buildTabGroupShadowCss(config) {
       transform: none !important;
       translate: 0 0 !important;
       overflow: visible !important;
+      scroll-snap-align: none !important;
     }
 
     slot[name="nav"]::slotted(ha-tab-group-tab),
@@ -936,6 +1179,7 @@ function buildTabGroupShadowCss(config) {
       bottom: auto !important;
       transform: none !important;
       translate: 0 0 !important;
+      scroll-snap-align: none !important;
     }
 
     :host::before,
@@ -996,6 +1240,8 @@ function buildTabGroupShadowCss(config) {
     .scroll-button-end,
     wa-button.scroll-button,
     [part~="scroll-button"],
+    [part~="scroll-button-start"],
+    [part~="scroll-button-end"],
     [class*="scroll-button"] {
       display: none !important;
       opacity: 0 !important;
@@ -1017,13 +1263,7 @@ function buildTabGroupShadowCss(config) {
     }
   `;
 
-  if (!config.mobile_only) return css;
-
-  return `
-    @media (max-width: ${config.mobile_max_width}) {
-      ${css}
-    }
-  `;
+  return scopeCss(config, css);
 }
 
 function buildButtonShadowCss(config) {
@@ -1058,35 +1298,12 @@ function buildButtonShadowCss(config) {
       transform: none !important;
       translate: 0 0 !important;
       box-sizing: border-box !important;
-    }
-
-    ha-button::part(base),
-    ha-button::part(button),
-    ha-button::part(label),
-    ha-button::part(start),
-    ha-button::part(end) {
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
-      padding: 0 !important;
-      margin: 0 !important;
-      color: inherit !important;
-      background: transparent !important;
-      border: 0 !important;
-      box-shadow: none !important;
-      outline: 0 !important;
-      overflow: visible !important;
-    }
-
-    ha-button::part(label),
-    ha-button::part(start),
-    ha-button::part(end) {
-      width: ${iconSize} !important;
-      height: ${iconSize} !important;
-      min-width: ${iconSize} !important;
-      min-height: ${iconSize} !important;
-      font-size: ${iconSize} !important;
-      line-height: 1 !important;
+      position: relative !important;
+      overflow: hidden !important;
+      line-height: 0 !important;
     }
 
     :host::before,
@@ -1135,7 +1352,9 @@ function buildButtonShadowCss(config) {
       margin: 0 !important;
       color: inherit !important;
       line-height: 1 !important;
-      transform: none !important;
+      display: block !important;
+      box-sizing: border-box !important;
+      transform: translateY(var(${ICON_Y_OFFSET_VAR}, 0px)) !important;
       translate: 0 0 !important;
     }
 
@@ -1153,7 +1372,8 @@ function buildButtonShadowCss(config) {
       color: inherit !important;
       font-size: 0 !important;
       line-height: 0 !important;
-      overflow: visible !important;
+      overflow: hidden !important;
+      box-sizing: border-box !important;
     }
 
     slot::slotted(ha-icon),
@@ -1175,26 +1395,73 @@ function buildButtonShadowCss(config) {
       stroke: currentColor !important;
       font-size: ${iconSize} !important;
       line-height: 1 !important;
-      transform: none !important;
+      transform: translateY(var(${ICON_Y_OFFSET_VAR}, 0px)) !important;
       translate: 0 0 !important;
     }
   `;
 
-  if (!config.mobile_only) return css;
+  return scopeCss(config, css);
+}
 
-  return `
-    @media (max-width: ${config.mobile_max_width}) {
-      ${css}
+function buildIconShadowCss(config) {
+  if (!config.enabled || !config.hide_labels) return "";
+
+  const iconSize = `var(${ICON_SIZE_VAR}, 24px)`;
+  const css = `
+    :host {
+      --mdc-icon-size: ${iconSize} !important;
+      width: ${iconSize} !important;
+      min-width: ${iconSize} !important;
+      max-width: ${iconSize} !important;
+      height: ${iconSize} !important;
+      min-height: ${iconSize} !important;
+      max-height: ${iconSize} !important;
+      flex: 0 0 ${iconSize} !important;
+      display: block !important;
+      position: relative !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      overflow: hidden !important;
+      line-height: 0 !important;
+      box-sizing: border-box !important;
+    }
+
+    svg,
+    [part~="svg"] {
+      width: 100% !important;
+      min-width: 100% !important;
+      max-width: 100% !important;
+      height: 100% !important;
+      min-height: 100% !important;
+      max-height: 100% !important;
+      display: block !important;
+      position: absolute !important;
+      inset: 0 !important;
+      padding: 0 !important;
+      margin: auto !important;
+      overflow: visible !important;
+      transform: none !important;
+      translate: 0 0 !important;
+      box-sizing: border-box !important;
+    }
+
+    g,
+    path {
+      transform: none !important;
+      transform-origin: center !important;
     }
   `;
+
+  return scopeCss(config, css);
 }
 
 function buildHeaderCss(config) {
   const headerSelector = `.header[${NAV_ATTR}]`;
-  const dockSelector = `[${DOCK_ATTR}]`;
   const controlSize = `var(${CONTROL_SIZE_VAR}, 48px)`;
   const iconSize = `var(${ICON_SIZE_VAR}, 24px)`;
+  const tabYOffset = `var(${TAB_Y_OFFSET_VAR}, ${config.tab_y_offset})`;
   const controlRadius = `calc(${controlSize} / 2)`;
+  const actionMenuZIndex = String((Number.parseInt(config.z_index, 10) || 1000) + 20);
   const dockCss = config.dock
     ? `
       left: max(${config.side_gap}, env(safe-area-inset-left)) !important;
@@ -1202,6 +1469,7 @@ function buildHeaderCss(config) {
       width: auto !important;
       height: ${config.height} !important;
       min-height: ${config.height} !important;
+      max-height: ${config.height} !important;
       border-radius: ${config.radius} !important;
       box-sizing: border-box !important;
       overflow: visible !important;
@@ -1212,6 +1480,9 @@ function buildHeaderCss(config) {
       box-shadow: ${config.shadow} !important;
       backdrop-filter: blur(22px) saturate(1.45) !important;
       -webkit-backdrop-filter: blur(22px) saturate(1.45) !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
     `
     : `
       left: 0 !important;
@@ -1226,10 +1497,9 @@ function buildHeaderCss(config) {
       min-height: ${config.height} !important;
       max-height: ${config.height} !important;
       padding: 0 10px !important;
-      padding-top: 0 !important;
-      padding-bottom: 0 !important;
-      padding-block: 0 !important;
-      margin: 0 !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 0 !important;
       background: transparent !important;
       border: 0 !important;
       box-shadow: none !important;
@@ -1238,22 +1508,21 @@ function buildHeaderCss(config) {
       justify-content: center !important;
       box-sizing: border-box !important;
       overflow: visible !important;
-      transform: none !important;
-      translate: 0 0 !important;
     `
     : `
       min-height: ${config.height} !important;
     `;
 
   const sideButtonCss = `
+    ${headerSelector} app-toolbar,
     ${headerSelector} .toolbar {
       height: ${config.height} !important;
       min-height: ${config.height} !important;
       max-height: ${config.height} !important;
-      padding: 0 10px !important;
-      padding-top: 0 !important;
-      padding-bottom: 0 !important;
-      padding-block: 0 !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 0 !important;
+      padding: 0 4px !important;
       margin: 0 !important;
       background: transparent !important;
       border: 0 !important;
@@ -1265,13 +1534,141 @@ function buildHeaderCss(config) {
       border-inline: 0 !important;
       box-shadow: none !important;
       outline: 0 !important;
+      display: grid !important;
+      grid-template-columns: ${controlSize} minmax(0, 1fr) ${controlSize} !important;
+      grid-template-rows: ${config.height} !important;
+      align-items: center !important;
+      justify-content: stretch !important;
+      justify-items: center !important;
+      box-sizing: border-box !important;
+      gap: 0 !important;
+      position: relative !important;
+      overflow: visible !important;
+    }
+
+    ${headerSelector} app-toolbar > ha-menu-button,
+    ${headerSelector} app-toolbar > ha-icon-button[slot="navigationIcon"],
+    ${headerSelector} .toolbar > ha-menu-button,
+    ${headerSelector} [${NAV_PART_ATTR}="menu"] {
+      order: 0 !important;
+      grid-column: 1 !important;
+      justify-self: center !important;
+      flex: 0 0 ${controlSize} !important;
+    }
+
+    ${headerSelector} app-toolbar > ha-tabs,
+    ${headerSelector} app-toolbar > ha-tab-group,
+    ${headerSelector} app-toolbar > sl-tab-group,
+    ${headerSelector} app-toolbar > wa-tab-group,
+    ${headerSelector} .toolbar > ha-tabs,
+    ${headerSelector} .toolbar > ha-tab-group,
+    ${headerSelector} .toolbar > sl-tab-group,
+    ${headerSelector} .toolbar > wa-tab-group,
+    ${headerSelector} [${NAV_PART_ATTR}="views"] {
+      order: 1 !important;
+      grid-column: 2 !important;
+      justify-self: stretch !important;
+      flex: 1 1 auto !important;
+      min-width: 0 !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      height: ${controlSize} !important;
+      min-height: ${controlSize} !important;
+      max-height: ${controlSize} !important;
+      align-self: center !important;
+      ${TAB_Y_OFFSET_VAR}: ${config.tab_y_offset} !important;
+      ${ICON_Y_OFFSET_VAR}: 0px !important;
+      ${VIEW_ICON_Y_OFFSET_VAR}: 0px !important;
+      overflow-x: auto !important;
+      overflow-y: hidden !important;
+      -webkit-overflow-scrolling: touch !important;
+      position: relative !important;
+      top: calc(var(${TAB_Y_OFFSET_VAR}, ${config.tab_y_offset}) + var(${CONTENT_Y_OFFSET_VAR}, 0px)) !important;
+    }
+
+    ${headerSelector} .action-items {
+      order: 2 !important;
+      grid-column: 3 !important;
+      justify-self: center !important;
+      flex: 0 0 ${controlSize} !important;
+      width: ${controlSize} !important;
+      min-width: ${controlSize} !important;
+      max-width: ${controlSize} !important;
+      height: ${controlSize} !important;
+      min-height: ${controlSize} !important;
+      max-height: ${controlSize} !important;
+      margin: 0 !important;
+      padding: 0 !important;
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
-      box-sizing: border-box !important;
       overflow: visible !important;
-      transform: none !important;
-      translate: 0 0 !important;
+      position: relative !important;
+      top: var(${CONTENT_Y_OFFSET_VAR}, 0px) !important;
+      z-index: 2 !important;
+    }
+
+    ${headerSelector} .action-items > ha-icon-button,
+    ${headerSelector} .action-items > ha-button-menu,
+    ${headerSelector} .action-items > ha-dropdown {
+      flex: 0 0 ${controlSize} !important;
+      width: ${controlSize} !important;
+      min-width: ${controlSize} !important;
+      max-width: ${controlSize} !important;
+      height: ${controlSize} !important;
+      min-height: ${controlSize} !important;
+      max-height: ${controlSize} !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      position: relative !important;
+      top: 0 !important;
+      overflow: visible !important;
+    }
+
+    ${headerSelector} app-toolbar > ha-icon-button:not([slot="navigationIcon"]),
+    ${headerSelector} .toolbar > ha-icon-button:not([slot="navigationIcon"]),
+    ${headerSelector} [${NAV_PART_ATTR}="actions"] {
+      order: 2 !important;
+      grid-column: 3 !important;
+      justify-self: center !important;
+      flex: 0 0 ${controlSize} !important;
+      width: ${controlSize} !important;
+      min-width: ${controlSize} !important;
+      max-width: ${controlSize} !important;
+      height: ${controlSize} !important;
+      min-height: ${controlSize} !important;
+      max-height: ${controlSize} !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      position: relative !important;
+      top: var(${CONTENT_Y_OFFSET_VAR}, 0px) !important;
+      overflow: visible !important;
+    }
+
+    ${headerSelector} app-toolbar > ha-button-menu,
+    ${headerSelector} .toolbar > ha-button-menu {
+      order: 2 !important;
+      grid-column: 3 !important;
+      justify-self: center !important;
+      flex: 0 0 ${controlSize} !important;
+      width: ${controlSize} !important;
+      min-width: ${controlSize} !important;
+      max-width: ${controlSize} !important;
+      height: ${controlSize} !important;
+      min-height: ${controlSize} !important;
+      max-height: ${controlSize} !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      position: relative !important;
+      top: var(${CONTENT_Y_OFFSET_VAR}, 0px) !important;
+      overflow: visible !important;
     }
 
     ${headerSelector}::before,
@@ -1292,29 +1689,53 @@ function buildHeaderCss(config) {
       outline: 0 !important;
     }
 
-    ${headerSelector} ha-menu-button,
-    ${headerSelector} ha-icon-button,
-    ${headerSelector} ha-button-menu,
     ${headerSelector} app-toolbar > ha-menu-button,
-    ${headerSelector} app-toolbar > ha-icon-button,
-    ${headerSelector} app-toolbar > ha-button-menu {
+    ${headerSelector} app-toolbar > ha-icon-button[slot="navigationIcon"],
+    ${headerSelector} app-toolbar > ha-button-menu,
+    ${headerSelector} .toolbar > ha-menu-button,
+    ${headerSelector} .toolbar > ha-icon-button[slot="navigationIcon"],
+    ${headerSelector} .toolbar > ha-button-menu,
+    ${headerSelector} [${NAV_PART_ATTR}="menu"] {
       --mdc-icon-button-size: ${controlSize} !important;
       --mdc-icon-size: ${iconSize} !important;
       flex: 0 0 ${controlSize} !important;
       width: ${controlSize} !important;
       min-width: ${controlSize} !important;
+      max-width: ${controlSize} !important;
       height: ${controlSize} !important;
       min-height: ${controlSize} !important;
+      max-height: ${controlSize} !important;
       margin: 0 !important;
       border-radius: ${controlRadius} !important;
       background: transparent !important;
       box-shadow: none !important;
       outline: 0 !important;
-      color: ${config.inactive_color} !important;
-      opacity: 1 !important;
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
+      position: relative !important;
+      top: 0 !important;
+      overflow: hidden !important;
+    }
+
+    ${headerSelector} [${NAV_PART_ATTR}="menu"] {
+      top: var(${MENU_Y_OFFSET_VAR}, var(${CONTENT_Y_OFFSET_VAR}, 0px)) !important;
+    }
+
+    ${headerSelector} [${NAV_PART_ATTR}="actions"],
+    ${headerSelector} [${NAV_PART_ATTR}="actions"] ha-dropdown,
+    ${headerSelector} [${NAV_PART_ATTR}="actions"] ha-button-menu,
+    ${headerSelector} ha-dropdown[slot="actionItems"],
+    ${headerSelector} ha-button-menu[slot="actionItems"] {
+      overflow: visible !important;
+      z-index: 3 !important;
+    }
+
+    ${headerSelector} [${NAV_PART_ATTR}="actions"] ha-dropdown::part(popup),
+    ${headerSelector} ha-dropdown[slot="actionItems"]::part(popup),
+    ${headerSelector} [data-ha-native-nav-position-action-menu]::part(popup),
+    ${headerSelector} [data-ha-native-nav-position-action-menu]::part(menu) {
+      z-index: ${actionMenuZIndex} !important;
     }
 
     ${headerSelector} ha-menu-button::part(base),
@@ -1339,193 +1760,21 @@ function buildHeaderCss(config) {
       box-shadow: none !important;
       outline: 0 !important;
     }
-
-    ${headerSelector} ha-menu-button::part(label),
-    ${headerSelector} ha-icon-button::part(label),
-    ${headerSelector} ha-button-menu::part(label),
-    ${headerSelector} app-toolbar > ha-menu-button::part(label),
-    ${headerSelector} app-toolbar > ha-icon-button::part(label),
-    ${headerSelector} app-toolbar > ha-button-menu::part(label) {
-      display: flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      width: ${iconSize} !important;
-      height: ${iconSize} !important;
-      min-width: ${iconSize} !important;
-      min-height: ${iconSize} !important;
-      padding: 0 !important;
-      margin: 0 !important;
-      color: inherit !important;
-      overflow: visible !important;
-    }
-
-    ${headerSelector} ha-menu-button ha-icon,
-    ${headerSelector} ha-menu-button ha-svg-icon,
-    ${headerSelector} ha-menu-button svg,
-    ${headerSelector} ha-icon-button ha-icon,
-    ${headerSelector} ha-icon-button ha-svg-icon,
-    ${headerSelector} ha-icon-button svg,
-    ${headerSelector} ha-button-menu ha-icon,
-    ${headerSelector} ha-button-menu ha-svg-icon,
-    ${headerSelector} ha-button-menu svg,
-    ${headerSelector} app-toolbar > ha-menu-button ha-icon,
-    ${headerSelector} app-toolbar > ha-menu-button ha-svg-icon,
-    ${headerSelector} app-toolbar > ha-menu-button svg,
-    ${headerSelector} app-toolbar > ha-icon-button ha-icon,
-    ${headerSelector} app-toolbar > ha-icon-button ha-svg-icon,
-    ${headerSelector} app-toolbar > ha-icon-button svg,
-    ${headerSelector} app-toolbar > ha-button-menu ha-icon,
-    ${headerSelector} app-toolbar > ha-button-menu ha-svg-icon,
-    ${headerSelector} app-toolbar > ha-button-menu svg {
-      --mdc-icon-size: ${iconSize} !important;
-      width: ${iconSize} !important;
-      height: ${iconSize} !important;
-      min-width: ${iconSize} !important;
-      min-height: ${iconSize} !important;
-      display: block !important;
-      visibility: visible !important;
-      opacity: 1 !important;
-      color: inherit !important;
-      fill: currentColor !important;
-      stroke: currentColor !important;
-      transform: none !important;
-      translate: 0 0 !important;
-    }
   `;
-
-  const dockToolbarCss = `
-    ${dockSelector} .${DOCK_TOOLBAR_CLASS} {
-      width: 100% !important;
-      height: ${config.height} !important;
-      min-height: ${config.height} !important;
-      max-height: ${config.height} !important;
-      padding: 0 10px !important;
-      padding-top: 0 !important;
-      padding-bottom: 0 !important;
-      padding-block: 0 !important;
-      margin: 0 !important;
-      background: transparent !important;
-      border: 0 !important;
-      box-shadow: none !important;
-      outline: 0 !important;
-      display: flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      gap: 0 !important;
-      box-sizing: border-box !important;
-      overflow: visible !important;
-      transform: none !important;
-      translate: 0 0 !important;
-      pointer-events: auto !important;
-    }
-
-    ${dockSelector} .${DOCK_TOOLBAR_CLASS}::before,
-    ${dockSelector} .${DOCK_TOOLBAR_CLASS}::after {
-      display: none !important;
-      opacity: 0 !important;
-      background: transparent !important;
-      border: 0 !important;
-      box-shadow: none !important;
-      outline: 0 !important;
-    }
-  `;
-
-  const dockSideButtonCss = sideButtonCss.replaceAll(headerSelector, dockSelector);
-
-  if (config.dock) {
-    const dockPositionCss =
-      config.position === "top"
-        ? `
-          top: calc(${config.offset} + env(safe-area-inset-top)) !important;
-          bottom: auto !important;
-        `
-        : `
-          top: auto !important;
-          bottom: calc(${config.offset} + env(safe-area-inset-bottom)) !important;
-        `;
-    const viewPaddingCss =
-      config.position === "top"
-        ? `
-          padding-top: calc(${config.top_padding} + env(safe-area-inset-top)) !important;
-          padding-bottom: 0 !important;
-          scroll-padding-top: calc(${config.top_padding} + env(safe-area-inset-top)) !important;
-        `
-        : `
-          padding-bottom: calc(${config.bottom_padding} + env(safe-area-inset-bottom)) !important;
-          scroll-padding-bottom: calc(${config.bottom_padding} + env(safe-area-inset-bottom)) !important;
-        `;
-
-    return `
-      ${headerSelector} {
-        height: 0 !important;
-        min-height: 0 !important;
-        max-height: 0 !important;
-        padding: 0 !important;
-        margin: 0 !important;
-        background: transparent !important;
-        border: 0 !important;
-        box-shadow: none !important;
-        outline: 0 !important;
-        overflow: visible !important;
-        pointer-events: none !important;
-      }
-
-      ${headerSelector} > :not([${DOCK_ATTR}]) {
-        visibility: hidden !important;
-        pointer-events: none !important;
-      }
-
-      ${dockSelector} {
-        position: fixed !important;
-        ${dockPositionCss}
-        z-index: ${config.z_index} !important;
-        transform: translateZ(0) !important;
-        color: ${config.inactive_color} !important;
-        pointer-events: auto !important;
-        ${dockCss}
-      }
-
-      ${dockToolbarCss}
-
-      ${dockSelector} app-toolbar,
-      ${dockSelector} ha-tabs,
-      ${dockSelector} ha-tab-group {
-        ${toolbarCss}
-      }
-
-      ${sideButtonCss}
-      ${dockSideButtonCss}
-
-      ha-panel-lovelace,
-      hui-root,
-      hui-view-container,
-      #view,
-      main,
-      hui-view,
-      hui-sections-view,
-      hui-masonry-view,
-      hui-panel-view {
-        ${viewPaddingCss}
-        box-sizing: border-box !important;
-      }
-    `;
-  }
 
   if (config.position === "top") {
     return `
       ${headerSelector} {
         position: fixed !important;
-        top: calc(${config.offset} + env(safe-area-inset-top)) !important;
+      top: calc(${config.offset} + env(safe-area-inset-top)) !important;
         bottom: auto !important;
         z-index: ${config.z_index} !important;
         transform: translateZ(0) !important;
-        color: ${config.inactive_color} !important;
         ${dockCss}
       }
 
       ${headerSelector} app-toolbar,
-      ${headerSelector} ha-tabs,
-      ${headerSelector} ha-tab-group {
+      ${headerSelector} .toolbar {
         ${toolbarCss}
       }
 
@@ -1554,13 +1803,34 @@ function buildHeaderCss(config) {
       bottom: calc(${config.offset} + env(safe-area-inset-bottom)) !important;
       z-index: ${config.z_index} !important;
       transform: translateZ(0) !important;
-      color: ${config.inactive_color} !important;
       ${dockCss}
     }
 
+    @supports (-webkit-touch-callout: none) {
+      ${headerSelector} {
+        bottom: calc(${config.ios_bottom_offset} + env(safe-area-inset-bottom)) !important;
+        ${TAB_Y_OFFSET_VAR}: ${config.tab_y_offset} !important;
+        ${ICON_Y_OFFSET_VAR}: ${config.ios_icon_y_offset} !important;
+        ${VIEW_ICON_Y_OFFSET_VAR}: ${config.ios_view_icon_y_offset} !important;
+      }
+
+      ${headerSelector} app-toolbar > ha-tabs,
+      ${headerSelector} app-toolbar > ha-tab-group,
+      ${headerSelector} app-toolbar > sl-tab-group,
+      ${headerSelector} app-toolbar > wa-tab-group,
+      ${headerSelector} .toolbar > ha-tabs,
+      ${headerSelector} .toolbar > ha-tab-group,
+      ${headerSelector} .toolbar > sl-tab-group,
+      ${headerSelector} .toolbar > wa-tab-group,
+      ${headerSelector} [${NAV_PART_ATTR}="views"] {
+        ${TAB_Y_OFFSET_VAR}: ${addCssSize(config.tab_y_offset, IOS_VIEW_Y_OFFSET)} !important;
+        ${ICON_Y_OFFSET_VAR}: ${config.ios_icon_y_offset} !important;
+        ${VIEW_ICON_Y_OFFSET_VAR}: ${config.ios_view_icon_y_offset} !important;
+      }
+    }
+
     ${headerSelector} app-toolbar,
-    ${headerSelector} ha-tabs,
-    ${headerSelector} ha-tab-group {
+    ${headerSelector} .toolbar {
       ${toolbarCss}
     }
 
@@ -1592,13 +1862,7 @@ function buildCss(config) {
     return `#${STYLE_ID}-disabled { display: none; }`;
   }
 
-  if (!config.mobile_only) return css;
-
-  return `
-    @media (max-width: ${config.mobile_max_width}) {
-      ${css}
-    }
-  `;
+  return scopeCss(config, css);
 }
 
 function isShadowRootFor(root, hosts) {
@@ -1619,6 +1883,48 @@ function sizeFromRect(rect, fallback) {
   const sizes = [rect.width, rect.height].filter((value) => Number.isFinite(value) && value > 0);
   if (!sizes.length) return fallback;
   return Math.round(Math.min(...sizes));
+}
+
+function parseCssPixelValue(value, fallback = 0) {
+  const number = Number.parseFloat(String(value || "").trim());
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function rectCenterY(element) {
+  const rect = element?.getBoundingClientRect?.();
+  if (!rect || !Number.isFinite(rect.height) || rect.height <= 0) return null;
+  return rect.top + rect.height / 2;
+}
+
+function averageNumbers(values) {
+  const valid = values.filter((value) => Number.isFinite(value));
+  if (!valid.length) return null;
+  return valid.reduce((sum, value) => sum + value, 0) / valid.length;
+}
+
+function collectDeepElements(root, selector, out = [], seen = new Set()) {
+  if (!root || seen.has(root)) return out;
+  seen.add(root);
+
+  if (root.nodeType === Node.ELEMENT_NODE && root.matches?.(selector)) {
+    out.push(root);
+  }
+
+  for (const element of Array.from(root.querySelectorAll?.("*") || [])) {
+    if (element.matches?.(selector)) out.push(element);
+
+    if (element.localName === "slot") {
+      for (const assigned of element.assignedElements?.({ flatten: true }) || []) {
+        collectDeepElements(assigned, selector, out, seen);
+      }
+    }
+
+    if (element.shadowRoot) {
+      collectDeepElements(element.shadowRoot, selector, out, seen);
+    }
+  }
+
+  return out;
 }
 
 function findFirstElement(root, selector) {
@@ -1654,919 +1960,689 @@ function closestComposed(element, selector) {
   return null;
 }
 
-function setInlineStyles(element, declarations) {
-  if (!element?.style) return;
-
-  let props = state.inlineStyles.get(element);
-  if (!props) {
-    props = new Set();
-    state.inlineStyles.set(element, props);
-    state.inlineElements.add(element);
-  }
-
-  for (const [property, value] of Object.entries(declarations)) {
-    const cssProperty = property.startsWith("--") ? property : toKebab(property);
-    props.add(cssProperty);
-    element.style.setProperty(cssProperty, value, "important");
-  }
-
-  element.setAttribute?.(INLINE_ATTR, "");
+function findToolbar(header) {
+  return header.querySelector("app-toolbar, .toolbar") || header;
 }
 
-function clearInlineStyles(element) {
-  const props = state.inlineStyles.get(element);
-  if (!props || !element?.style) return;
-
-  for (const property of props) {
-    element.style.removeProperty(property);
-  }
-
-  state.inlineStyles.delete(element);
-  state.inlineElements.delete(element);
-  element.removeAttribute?.(INLINE_ATTR);
+function findTabGroup(header) {
+  return header.querySelector("ha-tab-group, sl-tab-group, wa-tab-group, ha-tabs, paper-tabs, mwc-tab-bar, [role='tablist']");
 }
 
-function clearInlineStylesForHeader(header) {
-  for (const element of Array.from(state.inlineElements)) {
-    if (!element?.isConnected || closestComposed(element, ".header") === header) {
-      clearInlineStyles(element);
-    }
+function collectViewTabs(root) {
+  if (!root?.querySelectorAll) return [];
+  return Array.from(root.querySelectorAll(VIEW_TAB_SELECTOR));
+}
+
+function setViewTabIconOffset(header, tabGroup, offset) {
+  const tabs = new Set([
+    ...collectViewTabs(header),
+    ...collectViewTabs(tabGroup),
+    ...collectViewTabs(tabGroup?.shadowRoot)
+  ]);
+
+  for (const tab of tabs) {
+    tab.style.setProperty(VIEW_ICON_Y_OFFSET_VAR, offset);
   }
 }
 
-function clearAllInlineStyles() {
-  restoreAllDocks();
-  removeGeneratedIconsFor(document);
-  for (const element of Array.from(state.inlineElements)) {
-    clearInlineStyles(element);
+function clearViewTabIconOffset(header, tabGroup) {
+  const tabs = new Set([
+    ...collectViewTabs(header),
+    ...collectViewTabs(tabGroup),
+    ...collectViewTabs(tabGroup?.shadowRoot)
+  ]);
+
+  for (const tab of tabs) {
+    tab.style.removeProperty(VIEW_ICON_Y_OFFSET_VAR);
   }
 }
 
-function findSourceToolbar(header) {
-  return header.querySelector(".toolbar") || header.querySelector("app-toolbar") || header;
+function dockContentControls(header) {
+  return Array.from(
+    header?.querySelectorAll?.(
+      `[${NAV_PART_ATTR}="menu"], [${NAV_PART_ATTR}="views"], [${NAV_PART_ATTR}="actions"]`
+    ) || []
+  ).filter((control) => {
+    const rect = control.getBoundingClientRect?.();
+    return rect && rect.width > 0 && rect.height > 0;
+  });
 }
 
-function getDockRecord(header) {
-  let record = state.docks.get(header);
-  if (record?.dock && record?.toolbar) {
-    if (!record.dock.isConnected) {
-      const parent = header.parentNode;
-      if (parent) {
-        parent.insertBefore(record.dock, header.nextSibling);
-      } else {
-        document.body.appendChild(record.dock);
+function isUsableDockIconRect(element, rect, headerRect) {
+  if (!rect || rect.width <= 2 || rect.height <= 2) return false;
+  if (rect.height > headerRect.height * 1.4 || rect.width > headerRect.width * 0.8) return false;
+  if (rect.bottom < headerRect.top - 1 || rect.top > headerRect.bottom + 1) return false;
+
+  const style = window.getComputedStyle?.(element);
+  if (!style) return true;
+  if (style.display === "none" || style.visibility === "hidden") return false;
+  return parseCssPixelValue(style.opacity, 1) > 0.01;
+}
+
+function svgScreenPoint(svg, matrix, x, y) {
+  if (typeof DOMPoint === "function") {
+    return new DOMPoint(x, y).matrixTransform(matrix);
+  }
+
+  const point = svg.createSVGPoint?.();
+  if (!point) return null;
+  point.x = x;
+  point.y = y;
+  return point.matrixTransform(matrix);
+}
+
+function svgGraphicCenterY(svg, headerRect) {
+  const rects = Array.from(svg?.querySelectorAll?.(SVG_GRAPHIC_SELECTOR) || [])
+    .map((element) => {
+      const rect = element.getBoundingClientRect?.();
+      return isUsableDockIconRect(element, rect, headerRect) ? rect : null;
+    })
+    .filter(Boolean);
+
+  if (!rects.length) return null;
+
+  const top = Math.min(...rects.map((rect) => rect.top));
+  const bottom = Math.max(...rects.map((rect) => rect.bottom));
+  return top + (bottom - top) / 2;
+}
+
+function svgVisualCenterY(svg, headerRect) {
+  if (!svg) return null;
+
+  if (svg.getBBox && svg.getScreenCTM) {
+    try {
+      const box = svg.getBBox();
+      const matrix = svg.getScreenCTM();
+      if (matrix && box.width > 0 && box.height > 0) {
+        const points = [
+          svgScreenPoint(svg, matrix, box.x, box.y),
+          svgScreenPoint(svg, matrix, box.x + box.width, box.y),
+          svgScreenPoint(svg, matrix, box.x, box.y + box.height),
+          svgScreenPoint(svg, matrix, box.x + box.width, box.y + box.height)
+        ].filter(Boolean);
+        if (points.length) {
+          const ys = points.map((point) => point.y).filter((value) => Number.isFinite(value));
+          if (ys.length) return (Math.min(...ys) + Math.max(...ys)) / 2;
+        }
       }
-    }
-    return record;
-  }
-
-  const dock = document.createElement("div");
-  dock.setAttribute(DOCK_ATTR, "");
-
-  const toolbar = document.createElement("div");
-  toolbar.className = DOCK_TOOLBAR_CLASS;
-  dock.appendChild(toolbar);
-
-  const parent = header.parentNode;
-  if (parent) {
-    parent.insertBefore(dock, header.nextSibling);
-  } else {
-    document.body.appendChild(dock);
-  }
-
-  record = {
-    dock,
-    toolbar,
-    items: new Set()
-  };
-  state.docks.set(header, record);
-  state.dockHeaders.add(header);
-  return record;
-}
-
-function isNestedInSelectedElement(element, selected) {
-  let parent = element.parentElement;
-  while (parent) {
-    if (selected.has(parent)) return true;
-    parent = parent.parentElement;
-  }
-  return false;
-}
-
-function collectDockItems(header) {
-  const source = findSourceToolbar(header);
-  const directItems = Array.from(source.children || []).filter(
-    (element) =>
-      element.matches?.(DOCK_ALIGN_SELECTOR) ||
-      element.querySelector?.(TAB_GROUP_SELECTOR) ||
-      element.querySelector?.(SIDE_BUTTON_SELECTOR)
-  );
-
-  if (directItems.length) return directItems;
-
-  const candidates = new Set(header.querySelectorAll(DOCK_ALIGN_SELECTOR));
-  return Array.from(candidates).filter((element) => !isNestedInSelectedElement(element, candidates));
-}
-
-function restoreMovedElement(element) {
-  const original = state.movedElements.get(element);
-  if (!original?.parent) return;
-
-  const nextSibling =
-    original.nextSibling?.isConnected && original.nextSibling.parentNode === original.parent
-      ? original.nextSibling
-      : null;
-  original.parent.insertBefore(element, nextSibling);
-  element.removeAttribute?.(SOURCE_ATTR);
-  state.movedElements.delete(element);
-}
-
-function restoreDock(header) {
-  const record = state.docks.get(header);
-  if (!record) return;
-
-  for (const element of Array.from(record.items)) {
-    restoreMovedElement(element);
-  }
-
-  record.dock.remove();
-  state.docks.delete(header);
-  state.dockHeaders.delete(header);
-}
-
-function suspendDock(header) {
-  const record = state.docks.get(header);
-  if (!record) return;
-  record.dock.remove();
-}
-
-function restoreAllDocks() {
-  for (const header of Array.from(state.dockHeaders)) {
-    restoreDock(header);
-  }
-}
-
-function ensureDock(header) {
-  if (!state.config.dock) return header;
-
-  const record = getDockRecord(header);
-  const items = collectDockItems(header);
-
-  for (const element of items) {
-    if (!state.movedElements.has(element)) {
-      state.movedElements.set(element, {
-        parent: element.parentNode,
-        nextSibling: element.nextSibling
-      });
-    }
-    element.setAttribute?.(SOURCE_ATTR, "");
-    record.items.add(element);
-    record.toolbar.appendChild(element);
-  }
-
-  return record.dock;
-}
-
-function collectComposedElements(root, selector, results = new Set()) {
-  if (!root || !selector) return results;
-
-  if (root.nodeType === Node.ELEMENT_NODE && root.matches?.(selector)) {
-    results.add(root);
-  }
-
-  if (root.querySelectorAll) {
-    for (const element of root.querySelectorAll(selector)) {
-      results.add(element);
+    } catch (_error) {
+      // Some Home Assistant WebViews expose SVG nodes without getBBox support.
     }
   }
 
-  const walkerRoot = root === document ? document.documentElement : root;
-  if (!walkerRoot) return results;
-
-  const walker = document.createTreeWalker(walkerRoot, NodeFilter.SHOW_ELEMENT);
-  let node = walker.currentNode;
-  while (node) {
-    if (node.shadowRoot) {
-      collectComposedElements(node.shadowRoot, selector, results);
-    }
-    node = walker.nextNode();
-  }
-
-  return results;
+  return svgGraphicCenterY(svg, headerRect);
 }
 
-function collectAssignedSlotElements(root, results = new Set()) {
-  if (!root?.querySelectorAll) return results;
+function dockIconCenterYsForControl(control, headerRect) {
+  const elements = collectDeepElements(control, DOCK_CONTENT_ICON_SELECTOR);
+  const svgCenters = elements
+    .filter((element) => element.localName === "svg")
+    .map((element) => {
+      const rect = element.getBoundingClientRect?.();
+      if (!isUsableDockIconRect(element, rect, headerRect)) return null;
+      return svgVisualCenterY(element, headerRect);
+    })
+    .filter((center) => Number.isFinite(center));
 
-  for (const slot of root.querySelectorAll("slot")) {
-    const assigned = slot.assignedElements?.({ flatten: true }) || [];
-    for (const element of assigned) {
-      results.add(element);
-      collectComposedElements(element, ICON_SELECTOR, results);
-    }
-  }
+  if (svgCenters.length) return svgCenters;
 
-  return results;
+  return elements
+    .map((element) => {
+      const rect = element.getBoundingClientRect?.();
+      if (!isUsableDockIconRect(element, rect, headerRect)) return null;
+      return rect.top + rect.height / 2;
+    })
+    .filter((center) => Number.isFinite(center));
 }
 
-function isActiveTab(tab) {
-  return Boolean(
-    tab?.hasAttribute?.("active") ||
-      tab?.hasAttribute?.("selected") ||
-      tab?.hasAttribute?.("iron-selected") ||
-      tab?.getAttribute?.("aria-selected") === "true" ||
-      tab?.getAttribute?.("aria-current") === "page" ||
-      tab?.classList?.contains("active") ||
-      tab?.classList?.contains("iron-selected")
+function currentDockContentOffset(header) {
+  return parseCssPixelValue(
+    header?.style?.getPropertyValue(CONTENT_Y_OFFSET_VAR) ||
+      window.getComputedStyle?.(header)?.getPropertyValue(CONTENT_Y_OFFSET_VAR),
+    0
   );
 }
 
-function styleIconElement(icon, iconSize, color) {
-  setInlineStyles(icon, {
-    "--mdc-icon-size": iconSize,
-    width: iconSize,
-    height: iconSize,
-    minWidth: iconSize,
-    minHeight: iconSize,
-    maxWidth: iconSize,
-    maxHeight: iconSize,
-    display: "block",
-    visibility: "visible",
-    opacity: "1",
-    color,
-    fill: "currentColor",
-    stroke: "currentColor",
-    fontSize: iconSize,
-    lineHeight: "1",
-    transform: "none",
-    translate: "0 0",
-    pointerEvents: "none",
-    flex: `0 0 ${iconSize}`
-  });
-}
-
-function hideIconElement(icon) {
-  setInlineStyles(icon, {
-    position: "absolute",
-    left: "-9999px",
-    width: "0px",
-    height: "0px",
-    minWidth: "0px",
-    minHeight: "0px",
-    maxWidth: "0px",
-    maxHeight: "0px",
-    display: "none",
-    visibility: "hidden",
-    opacity: "0",
-    overflow: "hidden",
-    clipPath: "inset(50%)",
-    flex: "0 0 0px",
-    pointerEvents: "none"
-  });
-}
-
-function styleCenteredControl(element, controlSize, radius, color) {
-  setInlineStyles(element, {
-    width: controlSize,
-    height: controlSize,
-    minWidth: controlSize,
-    minHeight: controlSize,
-    maxWidth: controlSize,
-    maxHeight: controlSize,
-    padding: "0",
-    margin: "0",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    boxSizing: "border-box",
-    border: "0",
-    borderBottom: "0",
-    borderRadius: radius,
-    background: "transparent",
-    backgroundImage: "none",
-    boxShadow: "none",
-    outline: "0",
-    filter: "none",
-    backdropFilter: "none",
-    "-webkit-backdrop-filter": "none",
-    color,
-    transform: "none",
-    translate: "0 0"
-  });
-}
-
-function styleLabelContainer(element, size, color) {
-  setInlineStyles(element, {
-    width: size,
-    height: size,
-    minWidth: size,
-    minHeight: size,
-    padding: "0",
-    margin: "0",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    boxSizing: "border-box",
-    overflow: "visible",
-    fontSize: "0",
-    lineHeight: "0",
-    border: "0",
-    background: "transparent",
-    boxShadow: "none",
-    color
-  });
-}
-
-function iconNameValue(element) {
-  return String(
-    element?.getAttribute?.("icon") ||
-      element?.icon ||
-      element?.dataset?.icon ||
-      element?.getAttribute?.("data-icon") ||
-      element?.getAttribute?.("aria-label") ||
-      ""
-  ).trim();
-}
-
-function hasMeaningfulIconName(element) {
-  const name = iconNameValue(element).toLowerCase();
-  return Boolean(name) && !["none", "null", "undefined", "unknown", "mdi", "mdi:"].includes(name);
-}
-
-function svgHasGraphic(element) {
-  if (!element?.querySelector) return false;
-  return Boolean(
-    element.querySelector(
-      "path[d]:not([d='']), use, circle, rect, polygon, polyline, line, g > path[d]:not([d=''])"
-    )
-  );
-}
-
-function isIndicatorIconElement(element) {
-  return Boolean(
-    closestComposed(
-      element,
-      ".mdc-tab-indicator, .mdc-tab-indicator__content, [class*='active-indicator'], [class*='selection-indicator'], [part~='active-indicator'], [part~='selection-indicator'], [part~='indicator']"
-    )
-  );
-}
-
-function isMeaningfulTabIconElement(element) {
-  if (!element) return false;
-  if (closestComposed(element, `[${FALLBACK_ICON_ATTR}]`)) return true;
-  if (isIndicatorIconElement(element)) return false;
-
-  const iconHost = closestComposed(element, ICON_HOST_SELECTOR);
-  if (iconHost && iconHost !== element) return isMeaningfulTabIconElement(iconHost);
-
-  if (element.matches?.(ICON_HOST_SELECTOR)) {
-    return hasMeaningfulIconName(element);
-  }
-
-  if (element.localName === "svg") return svgHasGraphic(element);
-  return hasMeaningfulIconName(element) || svgHasGraphic(element);
-}
-
-function syncIconsInRoot(root, iconSize, color, options = {}) {
-  const icons = collectComposedElements(root, ICON_SELECTOR);
-  collectAssignedSlotElements(root?.shadowRoot || root, icons);
-  for (const icon of icons) {
-    if (options.tabIcons && !isMeaningfulTabIconElement(icon)) {
-      hideIconElement(icon);
-      continue;
-    }
-    styleIconElement(icon, iconSize, color);
+function setDockContentOffset(header, offset) {
+  const value = `${offset}px`;
+  header?.style?.setProperty(CONTENT_Y_OFFSET_VAR, value);
+  findTabGroup(header)?.style?.setProperty(CONTENT_Y_OFFSET_VAR, value);
+  for (const control of dockContentControls(header)) {
+    control.style.setProperty(CONTENT_Y_OFFSET_VAR, value);
   }
 }
 
-function removeGeneratedIcon(icon) {
-  if (!icon) return;
-  clearInlineStyles(icon);
-  icon.remove();
-  state.generatedIcons.delete(icon);
-}
-
-function removeGeneratedIconsFor(root) {
-  for (const icon of Array.from(state.generatedIcons)) {
-    if (!icon.isConnected || root === document || root?.contains?.(icon)) {
-      removeGeneratedIcon(icon);
-    }
+function clearDockContentCenter(header) {
+  if (!header) return;
+  const elements = new Set([header, findTabGroup(header), ...dockContentControls(header)]);
+  for (const element of elements) {
+    element?.style?.removeProperty(CONTENT_Y_OFFSET_VAR);
   }
 }
 
-function removeEmptyLightDomTabIcons(tab) {
-  for (const icon of Array.from(tab.querySelectorAll?.(ICON_HOST_SELECTOR) || [])) {
-    if (closestComposed(icon, `[${FALLBACK_ICON_ATTR}]`)) continue;
-    if (hasMeaningfulIconName(icon)) continue;
-    clearInlineStyles(icon);
-    icon.remove();
-  }
-}
-
-function normalizeLabel(value) {
-  return String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim()
-    .toLowerCase();
-}
-
-function tabLabel(tab) {
-  return (
-    tab.getAttribute?.("aria-label") ||
-    tab.getAttribute?.("title") ||
-    tab.getAttribute?.("label") ||
-    tab.textContent ||
-    ""
-  );
-}
-
-function fallbackIconName(tab, index) {
-  const label = normalizeLabel(tabLabel(tab));
-  if (index === 0 || /\b(home|accueil|maison)\b/.test(label)) return "mdi:home";
-  if (/\b(volet|volets|shutter|shutters)\b/.test(label)) return "mdi:window-shutter";
-  if (/\b(chauffage|climat|climate|temperature)\b/.test(label)) return "mdi:home-thermometer";
-  if (/\b(lumiere|eclairage|light|lights)\b/.test(label)) return "mdi:lightbulb";
-  if (/\b(camera|cameras|video)\b/.test(label)) return "mdi:cctv";
-  return "mdi:view-dashboard-outline";
-}
-
-function dashboardEditModeFromUrl() {
-  let url;
-  try {
-    url = new URL(window.location.href);
-  } catch (_error) {
-    return false;
-  }
-
-  return ["edit", "edit_mode", "editMode"].some((key) => {
-    const value = url.searchParams.get(key);
-    return value !== null && value !== "0" && value !== "false";
-  });
-}
-
-function elementActionText(element) {
-  const parts = [
-    element.getAttribute?.("aria-label"),
-    element.getAttribute?.("title"),
-    element.getAttribute?.("label"),
-    element.getAttribute?.("icon"),
-    element.textContent
-  ];
-
-  for (const child of element.querySelectorAll?.("ha-icon, ha-svg-icon, mwc-icon, md-icon, iron-icon") || []) {
-    parts.push(child.getAttribute("icon"), child.textContent);
-  }
-
-  if (element.shadowRoot) {
-    for (const child of element.shadowRoot.querySelectorAll("ha-icon, ha-svg-icon, mwc-icon, md-icon, iron-icon, [aria-label], [title]")) {
-      parts.push(child.getAttribute("aria-label"), child.getAttribute("title"), child.getAttribute("icon"), child.textContent);
-    }
-  }
-
-  return normalizeLabel(parts.filter(Boolean).join(" "));
-}
-
-function hasEditModeHints(root) {
-  if (!root?.querySelectorAll) return false;
-
-  const actions = Array.from(
-    root.querySelectorAll("ha-icon-button, ha-button-menu, ha-button, mwc-button, md-button, button")
-  );
-  const text = actions.map(elementActionText).join(" ");
-
-  if (/\b(done|finish|terminer|modifier le tableau|edit dashboard|take control|prendre le controle)\b/.test(text)) {
-    return true;
-  }
-
-  const editActionCount = actions.filter((element) =>
-    /\b(undo|redo|annuler|retablir|help|aide|plus|add|ajouter|pencil|edit|modifier|check|done|terminer)\b|mdi:(undo|redo|help|plus|pencil|check)/.test(
-      elementActionText(element)
-    )
-  ).length;
-
-  return editActionCount >= 3 && !hasNavigationTabs(root);
-}
-
-function isDashboardEditMode(header) {
-  if (dashboardEditModeFromUrl()) return true;
-
-  const source = findSourceToolbar(header);
-  if (hasEditModeHints(source)) return true;
-
-  const dockRecord = state.docks.get(header);
-  if (dockRecord?.dock && hasEditModeHints(dockRecord.dock)) return true;
-
-  return false;
-}
-
-function hasRealTabIcon(tab) {
-  return Array.from(collectComposedElements(tab, ICON_SELECTOR)).some(
-    (element) => !closestComposed(element, `[${FALLBACK_ICON_ATTR}]`) && isMeaningfulTabIconElement(element)
-  );
-}
-
-function fallbackIconContainer(tab) {
-  return tab;
-}
-
-function fallbackIconSlot(tab) {
-  const slot =
-    tab.shadowRoot?.querySelector("slot[name='icon']") ||
-    tab.shadowRoot?.querySelector("slot[name='prefix']") ||
-    tab.shadowRoot?.querySelector("slot[name='start']");
-  return slot?.name || "";
-}
-
-function ensureFallbackTabIcon(tab, index, iconSize, color) {
-  const generated = tab.querySelector?.(`[${FALLBACK_ICON_ATTR}]`);
-  if (hasRealTabIcon(tab)) {
-    removeGeneratedIcon(generated);
+function syncDockContentCenter(header) {
+  if (!header || !header.isConnected || !state.config.dock) {
+    clearDockContentCenter(header);
     return;
   }
 
-  removeEmptyLightDomTabIcons(tab);
+  const headerRect = header.getBoundingClientRect?.();
+  if (!headerRect || headerRect.width <= 0 || headerRect.height <= 0) return;
 
-  let icon = generated;
-  const name = fallbackIconName(tab, index);
-  if (!icon) {
-    icon = document.createElement("ha-icon");
-    icon.setAttribute(FALLBACK_ICON_ATTR, "");
-    icon.setAttribute("aria-hidden", "true");
-    icon.setAttribute("icon", name);
-    icon.icon = name;
-    icon.dataset.icon = name.replace(/^mdi:/, "");
-    const slotName = fallbackIconSlot(tab);
-    if (slotName) icon.setAttribute("slot", slotName);
-    fallbackIconContainer(tab).appendChild(icon);
-    state.generatedIcons.add(icon);
+  const controls = dockContentControls(header);
+  if (!controls.length) return;
+
+  const currentOffset = currentDockContentOffset(header);
+  let centers = controls.flatMap((control) => dockIconCenterYsForControl(control, headerRect));
+  if (!centers.length) {
+    centers = controls.map(rectCenterY).filter((center) => Number.isFinite(center));
   }
 
-  icon.setAttribute("icon", name);
-  icon.icon = name;
-  icon.dataset.icon = name.replace(/^mdi:/, "");
-  styleIconElement(icon, iconSize, color);
+  const rawCenter = averageNumbers(centers.map((center) => center - currentOffset));
+  if (!Number.isFinite(rawCenter)) return;
+
+  const headerCenter = headerRect.top + headerRect.height / 2;
+  const nextOffset = clampNumber(headerCenter - rawCenter, -24, 24);
+  const rounded = Math.abs(nextOffset) < 0.25 ? 0 : Math.round(nextOffset * 10) / 10;
+  setDockContentOffset(header, rounded);
 }
 
-function syncTabControl(tab, controlSize, iconSize, radius, index = 0, margin = "0") {
-  const active = isActiveTab(tab);
-  const color = active ? state.config.active_color : state.config.inactive_color;
-
-  setInlineStyles(tab, {
-    "--mdc-tab-min-width": controlSize,
-    "--mdc-tab-width": controlSize,
-    "--mdc-tab-height": controlSize,
-    "--md-primary-tab-container-height": controlSize,
-    "--md-primary-tab-active-indicator-height": "0",
-    "--md-primary-tab-active-indicator-color": "transparent",
-    "--mdc-tab-indicator-active-indicator-height": "0",
-    "--mdc-tab-indicator-active-indicator-color": "transparent",
-    flex: `0 0 ${controlSize}`,
-    width: controlSize,
-    height: controlSize,
-    minWidth: controlSize,
-    minHeight: controlSize,
-    maxWidth: controlSize,
-    maxHeight: controlSize,
-    margin,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    boxSizing: "border-box",
-    overflow: "visible",
-    border: "0",
-    borderBottom: "0",
-    borderRadius: radius,
-    background: "transparent",
-    boxShadow: "none",
-    outline: "0",
-    color,
-    opacity: active ? "1" : "0.82",
-    transform: "none",
-    translate: "0 0",
-    scrollSnapAlign: "none",
-    touchAction: "pan-x"
-  });
-
-  const internals = collectComposedElements(tab.shadowRoot, TAB_INTERNAL_SELECTOR);
-  for (const element of internals) {
-    styleCenteredControl(element, controlSize, radius, color);
-  }
-
-  const textLabels = collectComposedElements(tab.shadowRoot, TEXT_LABEL_SELECTOR);
-  for (const label of textLabels) {
-    setInlineStyles(label, { display: "none", opacity: "0" });
-  }
-
-  const labels = collectComposedElements(tab.shadowRoot, LABEL_SELECTOR);
-  for (const label of labels) {
-    styleLabelContainer(label, label.localName === "slot" ? iconSize : "100%", color);
-  }
-
-  ensureFallbackTabIcon(tab, index, iconSize, color);
-  syncIconsInRoot(tab, iconSize, color, { tabIcons: true });
+function scheduleDockContentCenter(header) {
+  syncDockContentCenter(header);
+  window.requestAnimationFrame?.(() => syncDockContentCenter(header));
+  window.setTimeout(() => syncDockContentCenter(header), 80);
+  window.setTimeout(() => syncDockContentCenter(header), 250);
 }
 
-function syncSideButton(button, controlSize, iconSize, radius) {
-  const color = state.config.inactive_color;
-  setInlineStyles(button, {
-    "--mdc-icon-button-size": controlSize,
-    "--mdc-icon-size": iconSize,
-    flex: `0 0 ${controlSize}`,
-    width: controlSize,
-    height: controlSize,
-    minWidth: controlSize,
-    minHeight: controlSize,
-    maxWidth: controlSize,
-    maxHeight: controlSize,
-    margin: "0",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: radius,
-    background: "transparent",
-    boxShadow: "none",
-    outline: "0",
-    color,
-    opacity: "1",
-    transform: "none",
-    translate: "0 0"
-  });
-
-  const internals = collectComposedElements(
-    button.shadowRoot,
-    "ha-button, button, [part~='base'], [part~='button'], [part~='label'], .mdc-icon-button"
-  );
-  for (const element of internals) {
-    styleCenteredControl(element, element.matches?.("[part~='label']") ? iconSize : controlSize, radius, color);
-  }
-
-  syncIconsInRoot(button, iconSize, color);
+function isNavigationButton(button) {
+  if (!button) return false;
+  return button.localName === "ha-menu-button" || button.getAttribute?.("slot") === "navigationIcon";
 }
 
-function syncToolbarContainer(container) {
-  setInlineStyles(container, {
-    height: state.config.height,
-    minHeight: state.config.height,
-    maxHeight: state.config.height,
-    padding: "0 10px",
-    paddingTop: "0",
-    paddingBottom: "0",
-    paddingBlock: "0",
-    margin: "0",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    boxSizing: "border-box",
-    overflow: "visible",
-    background: "transparent",
-    border: "0",
-    borderBottom: "0",
-    boxShadow: "none",
-    outline: "0",
-    transform: "none",
-    translate: "0 0"
-  });
-}
+function buttonText(button) {
+  const parts = [
+    button.localName,
+    button.getAttribute?.("aria-label"),
+    button.getAttribute?.("title"),
+    button.getAttribute?.("label"),
+    button.getAttribute?.("icon"),
+    button.textContent
+  ];
 
-function syncTabGroupInternals(group, controlSize, shouldCenter = false) {
-  const root = group.shadowRoot;
-  if (!root) return;
-
-  const elements = collectComposedElements(
-    root,
-    ".tab-group, .tab-group-top, .tab-group-bottom, .nav-container, .nav, .tabs, [part~='base'], [part~='nav'], [part~='tabs'], slot[name='nav'], slot:not([name])"
-  );
-
-  for (const element of elements) {
-    setInlineStyles(element, {
-      height: controlSize,
-      minHeight: controlSize,
-      maxHeight: controlSize,
-      padding: "0",
-      paddingTop: "0",
-      paddingBottom: "0",
-      paddingBlock: "0",
-      margin: "0",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: shouldCenter ? "center" : "flex-start",
-      boxSizing: "border-box",
-      overflowX: element.localName === "slot" ? "visible" : "auto",
-      overflowY: element.localName === "slot" ? "visible" : "hidden",
-      scrollBehavior: "auto",
-      scrollSnapType: "none",
-      scrollPaddingInline: "0",
-      position: "relative",
-      top: "0",
-      bottom: "auto",
-      transform: "none",
-      translate: "0 0",
-      scrollbarWidth: "none"
-    });
+  for (const icon of button.querySelectorAll?.("ha-icon, ha-svg-icon, mwc-icon, md-icon, iron-icon") || []) {
+    parts.push(icon.getAttribute("icon"), icon.textContent);
   }
 
-  collectAssignedSlotElements(root).forEach((element) => {
-    if (element.matches?.(TAB_SELECTOR)) {
-      setInlineStyles(element, {
-        alignSelf: "center",
-        marginTop: "0",
-        marginBottom: "0",
-        top: "0",
-        bottom: "auto",
-        transform: "none",
-        translate: "0 0"
-      });
+  if (button.shadowRoot) {
+    for (const icon of button.shadowRoot.querySelectorAll("ha-icon, ha-svg-icon, mwc-icon, md-icon, iron-icon, [aria-label], [title]")) {
+      parts.push(icon.getAttribute("aria-label"), icon.getAttribute("title"), icon.getAttribute("icon"), icon.textContent);
     }
-  });
+  }
+
+  return parts.filter(Boolean).join(" ").toLowerCase();
 }
 
-function syncTabGroupScroll(group) {
-  const tabs = Array.from(group.querySelectorAll(TAB_SELECTOR));
-  if (!tabs.length) return;
+function isDashboardMenuButton(button) {
+  if (!button || isNavigationButton(button)) return false;
+  if (
+    button.localName === "ha-button-menu" ||
+    button.localName === "ha-dropdown" ||
+    button.localName === "ha-icon-overflow-menu"
+  ) {
+    return true;
+  }
+  const text = buttonText(button);
+  return /dots|more|overflow|kebab|menu|mdi:dots-vertical|more_vert|plus|edit|modifier/.test(text);
+}
 
-  const resetScroll = (element) => {
-    if (!element) return;
+function markNavPart(element, part) {
+  if (element?.setAttribute) element.setAttribute(NAV_PART_ATTR, part);
+}
+
+function clearNavPartMarkers(header) {
+  for (const element of header?.querySelectorAll?.(`[${NAV_PART_ATTR}]`) || []) {
+    element.removeAttribute(NAV_PART_ATTR);
+  }
+}
+
+function normalizeDockParts(header) {
+  const toolbar = findToolbar(header);
+  const menuButton = header.querySelector("ha-menu-button, ha-icon-button[slot='navigationIcon']");
+  const tabGroup = findTabGroup(header);
+  const actionItems = header.querySelector(".action-items");
+  const actionButton = Array.from(
+    header.querySelectorAll("ha-icon-overflow-menu, ha-dropdown, ha-button-menu, ha-icon-button, mwc-icon-button, md-icon-button")
+  ).find(isDashboardMenuButton);
+  const actionPart = actionItems || actionButton;
+
+  clearNavPartMarkers(header);
+
+  markNavPart(menuButton, "menu");
+  markNavPart(tabGroup, "views");
+  markNavPart(actionPart, "actions");
+
+  if (!toolbar || !tabGroup) return;
+
+  if (menuButton && menuButton.parentElement === toolbar && toolbar.firstElementChild !== menuButton) {
+    toolbar.insertBefore(menuButton, toolbar.firstElementChild);
+  }
+
+  if (tabGroup.parentElement === toolbar && actionPart?.parentElement === toolbar) {
+    toolbar.insertBefore(tabGroup, actionPart);
+  }
+}
+
+function dashboardActionMenus(header) {
+  const actionPart = header?.querySelector?.(`[${NAV_PART_ATTR}="actions"]`);
+  const menus = new Set();
+
+  for (const root of [actionPart, actionPart?.shadowRoot]) {
+    for (const menu of collectDeepElements(root, "ha-dropdown, ha-button-menu")) {
+      menus.add(menu);
+    }
+  }
+
+  for (const menu of collectDeepElements(header, "ha-dropdown, ha-button-menu")) {
+    if (
+      menu.getAttribute?.("slot") === "actionItems" ||
+      menu.querySelector?.("#dashboardmenu") ||
+      menu.shadowRoot?.querySelector?.("#dashboardmenu") ||
+      closestComposed(menu, `[${NAV_PART_ATTR}="actions"]`)
+    ) {
+      menus.add(menu);
+    }
+  }
+
+  return Array.from(menus);
+}
+
+function rememberActionMenu(menu) {
+  let record = state.actionMenuRecords.get(menu);
+  if (record) return record;
+
+  record = {
+    hadPlacement: menu.hasAttribute?.("placement") || false,
+    placement: menu.getAttribute?.("placement") ?? "",
+    placementProperty: "placement" in menu ? menu.placement : undefined,
+    hadHoist: menu.hasAttribute?.("hoist") || false,
+    hoistProperty: "hoist" in menu ? menu.hoist : undefined,
+    hadCorner: menu.hasAttribute?.("corner") || false,
+    corner: menu.getAttribute?.("corner") ?? "",
+    cornerProperty: "corner" in menu ? menu.corner : undefined,
+    hadMenuCorner: menu.hasAttribute?.("menu-corner") || false,
+    menuCorner: menu.getAttribute?.("menu-corner") ?? "",
+    menuCornerProperty: "menuCorner" in menu ? menu.menuCorner : undefined,
+    fixedProperty: "fixed" in menu ? menu.fixed : undefined
+  };
+  state.actionMenuRecords.set(menu, record);
+  return record;
+}
+
+function setElementProperty(element, property, value) {
+  if (!(property in element)) return;
+  try {
+    element[property] = value;
+  } catch (_error) {
+    // Some Home Assistant elements expose read-only reflected properties.
+  }
+}
+
+function restoreAttribute(element, name, hadAttribute, value) {
+  if (hadAttribute) {
+    element.setAttribute(name, value);
+  } else {
+    element.removeAttribute(name);
+  }
+}
+
+function syncActionMenuPlacement(header) {
+  const placement = state.config.position === "bottom" ? "top-end" : "bottom-end";
+  const legacyCorner = state.config.position === "bottom" ? "TOP_END" : "BOTTOM_END";
+
+  for (const menu of dashboardActionMenus(header)) {
+    rememberActionMenu(menu);
+    menu.setAttribute("data-ha-native-nav-position-action-menu", "");
+
+    if (menu.localName === "ha-dropdown") {
+      menu.setAttribute("placement", placement);
+      menu.setAttribute("hoist", "");
+      setElementProperty(menu, "placement", placement);
+      setElementProperty(menu, "hoist", true);
+      continue;
+    }
+
+    menu.setAttribute("corner", legacyCorner);
+    menu.setAttribute("menu-corner", "END");
+    setElementProperty(menu, "corner", legacyCorner);
+    setElementProperty(menu, "menuCorner", "END");
+    setElementProperty(menu, "fixed", true);
+  }
+}
+
+function clearActionMenuPlacement(header) {
+  for (const menu of dashboardActionMenus(header)) {
+    const record = state.actionMenuRecords.get(menu);
+    if (!record) continue;
+
+    menu.removeAttribute("data-ha-native-nav-position-action-menu");
+    restoreAttribute(menu, "placement", record.hadPlacement, record.placement);
+    restoreAttribute(menu, "hoist", record.hadHoist, "");
+    restoreAttribute(menu, "corner", record.hadCorner, record.corner);
+    restoreAttribute(menu, "menu-corner", record.hadMenuCorner, record.menuCorner);
+    setElementProperty(menu, "placement", record.placementProperty);
+    setElementProperty(menu, "hoist", record.hoistProperty);
+    setElementProperty(menu, "corner", record.cornerProperty);
+    setElementProperty(menu, "menuCorner", record.menuCornerProperty);
+    setElementProperty(menu, "fixed", record.fixedProperty);
+    state.actionMenuRecords.delete(menu);
+  }
+}
+
+function findTabScrollTarget(tabGroup) {
+  if (!tabGroup) return null;
+  return (
+    tabGroup.shadowRoot?.querySelector(".tabs, .tab-group__tabs, [part~='tabs']") ||
+    tabGroup
+  );
+}
+
+function maxScrollLeft(element) {
+  if (!element) return 0;
+  return Math.max(0, Math.round((element.scrollWidth || 0) - (element.clientWidth || 0)));
+}
+
+function readScrollLeft(element) {
+  const value = Number(element?.scrollLeft);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function writeScrollLeft(element, left) {
+  if (!element) return;
+  const next = clampNumber(Math.round(left), 0, maxScrollLeft(element));
+  if (typeof element.scrollTo === "function") {
+    element.scrollTo({ left: next, behavior: "auto" });
+    return;
+  }
+
+  try {
+    element.scrollLeft = next;
+  } catch (_error) {
+    // Some Home Assistant scroll containers expose scrollLeft through scrollTo only.
+  }
+}
+
+function removeTabScrollHandler(record) {
+  if (!record) return;
+  for (const [target, type, handler, capture] of record.listeners) {
+    target.removeEventListener(type, handler, capture);
+  }
+}
+
+function enableHorizontalTabScroll(tabGroup) {
+  const scrollTarget = findTabScrollTarget(tabGroup);
+  if (!tabGroup || !scrollTarget) return;
+
+  const current = state.tabScrollHandlers.get(tabGroup);
+  if (current?.scrollTarget === scrollTarget) {
+    current.restore?.();
+    return;
+  }
+  removeTabScrollHandler(current);
+
+  let desiredLeft = readScrollLeft(scrollTarget);
+  let userScrolled = false;
+  let restoreTimer = 0;
+  const gesture = {
+    active: false,
+    horizontal: false,
+    pointerId: null,
+    lastTouchAt: 0,
+    startX: 0,
+    startY: 0,
+    startLeft: 0,
+    suppressClick: false
+  };
+
+  const canScroll = () => maxScrollLeft(scrollTarget) > 1;
+  const restore = () => {
+    restoreTimer = 0;
+    if (!userScrolled || !canScroll()) return;
+    desiredLeft = clampNumber(desiredLeft, 0, maxScrollLeft(scrollTarget));
+    if (Math.abs(readScrollLeft(scrollTarget) - desiredLeft) > 1) {
+      writeScrollLeft(scrollTarget, desiredLeft);
+    }
+  };
+
+  const scheduleRestore = (delay = 80) => {
+    if (restoreTimer) return;
+    restoreTimer = window.setTimeout(restore, delay);
+  };
+
+  const rememberScrollLeft = (left) => {
+    desiredLeft = clampNumber(left, 0, maxScrollLeft(scrollTarget));
+    userScrolled = true;
+    writeScrollLeft(scrollTarget, desiredLeft);
+    window.requestAnimationFrame(restore);
+    scheduleRestore(80);
+    window.setTimeout(restore, 250);
+    window.setTimeout(restore, 800);
+  };
+
+  const beginGesture = (clientX, clientY) => {
+    gesture.active = true;
+    gesture.horizontal = false;
+    gesture.startX = clientX;
+    gesture.startY = clientY;
+    gesture.startLeft = readScrollLeft(scrollTarget);
+  };
+
+  const moveGesture = (event, clientX, clientY) => {
+    if (!gesture.active) return;
+    const deltaX = gesture.startX - clientX;
+    const deltaY = gesture.startY - clientY;
+    const absX = Math.abs(deltaX);
+    const absY = Math.abs(deltaY);
+
+    if (!gesture.horizontal) {
+      if (absX < 8 && absY < 8) return;
+      if (absY > absX) {
+        gesture.active = false;
+        return;
+      }
+      gesture.horizontal = true;
+    }
+
+    if (event.cancelable) event.preventDefault();
+    event.stopPropagation();
+    rememberScrollLeft(gesture.startLeft + deltaX);
+  };
+
+  const finishGesture = (event) => {
+    if (gesture.horizontal) {
+      event?.stopPropagation?.();
+      gesture.suppressClick = true;
+      window.setTimeout(() => {
+        gesture.suppressClick = false;
+      }, 160);
+    }
+    gesture.active = false;
+    gesture.horizontal = false;
+    gesture.pointerId = null;
+  };
+
+  const onTouchStart = (event) => {
+    if (!canScroll() || event.touches?.length !== 1) return;
+    const touch = event.touches[0];
+    gesture.lastTouchAt = Date.now();
+    gesture.pointerId = null;
+    beginGesture(touch.clientX, touch.clientY);
+  };
+
+  const onTouchMove = (event) => {
+    if (!gesture.active || event.touches?.length !== 1) return;
+    const touch = event.touches[0];
+    moveGesture(event, touch.clientX, touch.clientY);
+  };
+
+  const onTouchEnd = finishGesture;
+  const onPointerDown = (event) => {
+    if (!canScroll() || event.pointerType === "mouse" || event.isPrimary === false) return;
+    if (Date.now() - gesture.lastTouchAt < 500) return;
+    if (typeof event.button === "number" && event.button !== 0) return;
+    gesture.pointerId = event.pointerId;
+    beginGesture(event.clientX, event.clientY);
     try {
-      element.scrollLeft = 0;
+      tabGroup.setPointerCapture?.(event.pointerId);
     } catch (_error) {
-      // Some Home Assistant internals expose read-only scroll positions.
+      // Some synthetic events and WebViews do not allow pointer capture.
     }
   };
 
-  const resetAll = () => {
-    resetScroll(group);
-    if (!group.shadowRoot) return;
-    for (const element of collectComposedElements(
-      group.shadowRoot,
-      ".tab-group, .nav-container, .nav, .tabs, [part~='base'], [part~='nav'], [part~='tabs'], [class*='scroll'], [id*='scroll']"
-    )) {
-      resetScroll(element);
+  const onPointerMove = (event) => {
+    if (gesture.pointerId !== event.pointerId) return;
+    moveGesture(event, event.clientX, event.clientY);
+  };
+
+  const onPointerEnd = (event) => {
+    if (gesture.pointerId !== event.pointerId) return;
+    try {
+      tabGroup.releasePointerCapture?.(event.pointerId);
+    } catch (_error) {
+      // Pointer capture may not have been established.
+    }
+    finishGesture(event);
+  };
+
+  const onClick = (event) => {
+    if (!gesture.suppressClick) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation?.();
+    gesture.suppressClick = false;
+  };
+
+  const onWheel = (event) => {
+    if (!canScroll()) return;
+    const absX = Math.abs(event.deltaX);
+    const absY = Math.abs(event.deltaY);
+    const delta = absX >= absY ? event.deltaX : event.shiftKey ? event.deltaY : 0;
+    if (!delta) return;
+
+    const before = readScrollLeft(scrollTarget);
+    writeScrollLeft(scrollTarget, before + delta);
+    if (readScrollLeft(scrollTarget) !== before) {
+      rememberScrollLeft(before + delta);
+      if (event.cancelable) event.preventDefault();
+      event.stopPropagation();
     }
   };
 
-  if (state.anchoredTabGroups.has(group)) return;
+  const listeners = [
+    [tabGroup, "touchstart", onTouchStart, true],
+    [tabGroup, "touchmove", onTouchMove, true],
+    [tabGroup, "touchend", onTouchEnd, true],
+    [tabGroup, "touchcancel", onTouchEnd, true],
+    [tabGroup, "pointerdown", onPointerDown, true],
+    [tabGroup, "pointermove", onPointerMove, true],
+    [tabGroup, "pointerup", onPointerEnd, true],
+    [tabGroup, "pointercancel", onPointerEnd, true],
+    [tabGroup, "click", onClick, true],
+    [tabGroup, "wheel", onWheel, true]
+  ];
 
-  state.anchoredTabGroups.add(group);
-  resetAll();
-  window.requestAnimationFrame(resetAll);
-  window.setTimeout(resetAll, 80);
-  window.setTimeout(resetAll, 250);
-  window.setTimeout(resetAll, 600);
-  window.setTimeout(resetAll, 1200);
-}
-
-function elementCenterY(element) {
-  if (!element?.getBoundingClientRect) return null;
-  const rect = element.getBoundingClientRect();
-  if (!Number.isFinite(rect.height) || rect.height <= 0) return null;
-  return rect.top + rect.height / 2;
-}
-
-function average(values) {
-  const valid = values.filter((value) => Number.isFinite(value));
-  if (!valid.length) return null;
-  return valid.reduce((sum, value) => sum + value, 0) / valid.length;
-}
-
-function visualCenterY(control) {
-  if (!control) return null;
-
-  const iconCenters = Array.from(collectComposedElements(control, ICON_SELECTOR))
-    .map(elementCenterY)
-    .filter((value) => value !== null);
-  const assignedIconCenters = Array.from(collectAssignedSlotElements(control.shadowRoot || control))
-    .filter((element) => element.matches?.(ICON_SELECTOR))
-    .map(elementCenterY)
-    .filter((value) => value !== null);
-  const centers = [...iconCenters, ...assignedIconCenters];
-
-  return average(centers) ?? elementCenterY(control);
-}
-
-function topLevelDockControls(navRoot) {
-  const candidates = new Set(navRoot.querySelectorAll(DOCK_ALIGN_SELECTOR));
-  return Array.from(candidates).filter((element) => !isNestedInSelectedElement(element, candidates));
-}
-
-function syncDockContentAlignment(navRoot) {
-  if (!state.config.dock) return;
-
-  for (const control of topLevelDockControls(navRoot)) {
-    setInlineStyles(control, {
-      alignSelf: "center",
-      transform: "none",
-      translate: "0 0",
-      willChange: "auto"
-    });
-  }
-}
-
-function tabControlSizeForGroup(group, controlSizeValue) {
-  return controlSizeValue;
-}
-
-function syncNavigationControls(header, controlSizeValue, iconSizeValue) {
-  const controlSize = `${controlSizeValue}px`;
-  const iconSize = `${iconSizeValue}px`;
-  const radius = `${Math.round(controlSizeValue / 2)}px`;
-  const styledTabs = new Set();
-
-  for (const container of header.querySelectorAll(TOOLBAR_CONTAINER_SELECTOR)) {
-    syncToolbarContainer(container);
+  for (const [target, type, handler, capture] of listeners) {
+    const passive = !["touchmove", "pointermove", "wheel"].includes(type);
+    target.addEventListener(type, handler, { capture, passive });
   }
 
-  for (const group of header.querySelectorAll(TAB_GROUP_SELECTOR)) {
-    const tabControlSizeValue = tabControlSizeForGroup(group, controlSizeValue);
-    const tabControlSize = `${tabControlSizeValue}px`;
-    const tabRadius = `${Math.round(tabControlSizeValue / 2)}px`;
-
-    setInlineStyles(group, {
-      minWidth: "0",
-      width: "100%",
-      height: controlSize,
-      minHeight: controlSize,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "flex-start",
-      overflowX: "auto",
-      overflowY: "hidden",
-      scrollbarWidth: "none",
-      scrollBehavior: "auto",
-      scrollSnapType: "none",
-      scrollPaddingInline: "0",
-      touchAction: "pan-x",
-      transform: "none",
-      translate: "0 0"
-    });
-
-    const tabs = Array.from(group.querySelectorAll(TAB_SELECTOR));
-    tabs.forEach((tab, index) => {
-      syncTabControl(tab, tabControlSize, iconSize, tabRadius, index);
-      styledTabs.add(tab);
-    });
-    const groupRect = group.getBoundingClientRect();
-    const totalTabWidth = tabs.reduce((sum, tab) => {
-      const rect = tab.getBoundingClientRect();
-      return sum + (Number.isFinite(rect.width) && rect.width > 0 ? rect.width : controlSizeValue);
-    }, 0);
-    const shouldCenter = Number.isFinite(groupRect.width) && totalTabWidth <= groupRect.width + 4;
-    setInlineStyles(group, { justifyContent: shouldCenter ? "center" : "flex-start" });
-    syncTabGroupInternals(group, controlSize, shouldCenter);
-    syncTabGroupScroll(group);
-  }
-
-  for (const button of header.querySelectorAll(SIDE_BUTTON_SELECTOR)) {
-    syncSideButton(button, controlSize, iconSize, radius);
-  }
-
-  Array.from(header.querySelectorAll(TAB_SELECTOR)).forEach((tab, index) => {
-    if (styledTabs.has(tab)) return;
-    syncTabControl(tab, controlSize, iconSize, radius, index);
-  });
-
-  syncDockContentAlignment(header);
+  tabGroup.setAttribute("data-ha-native-nav-scroll", "");
+  state.tabScrollHandlers.set(tabGroup, { scrollTarget, listeners, restore });
 }
 
 function syncHeaderMetrics(header) {
-  const navRoot = state.config.dock ? ensureDock(header) : header;
-  const button = navRoot.querySelector(
+  normalizeDockParts(header);
+  syncActionMenuPlacement(header);
+
+  const tabGroup = findTabGroup(header);
+  enableHorizontalTabScroll(tabGroup);
+
+  const button = header.querySelector(
     "ha-menu-button, app-toolbar > ha-menu-button, ha-icon-button[slot='navigationIcon'], app-toolbar > ha-icon-button"
   );
+  if (!button) return;
 
-  const controlSize = clampNumber(sizeFromRect(button?.getBoundingClientRect(), 48), 40, 56);
-  const icon = button ? findButtonIcon(button) : null;
+  const controlSize = clampNumber(sizeFromRect(button.getBoundingClientRect(), 48), 40, 56);
+  const icon = findButtonIcon(button);
   const iconSize = clampNumber(sizeFromRect(icon?.getBoundingClientRect(), Math.round(controlSize / 2)), 20, 30);
+  const controlYOffset =
+    isIOSLike() && state.config.position === "bottom"
+      ? addCssSize(state.config.tab_y_offset, IOS_VIEW_Y_OFFSET)
+      : state.config.tab_y_offset;
+  const iconYOffset =
+    isIOSLike() && state.config.position === "bottom"
+      ? state.config.ios_icon_y_offset
+      : "0px";
+  const menuIconYOffset =
+    isIOSLike() && state.config.position === "bottom"
+      ? state.config.ios_menu_icon_y_offset
+      : "0px";
+  const viewIconYOffset =
+    isIOSLike() && state.config.position === "bottom"
+      ? state.config.ios_view_icon_y_offset
+      : "0px";
+  const contentYOffset =
+    isIOSLike() && state.config.position === "bottom"
+      ? state.config.ios_content_y_offset
+      : "0px";
+  const menuYOffset =
+    isIOSLike() && state.config.position === "bottom"
+      ? state.config.ios_menu_y_offset
+      : "0px";
+  const menuButton = header.querySelector(`[${NAV_PART_ATTR}="menu"]`);
 
   header.style.setProperty(CONTROL_SIZE_VAR, `${controlSize}px`);
   header.style.setProperty(ICON_SIZE_VAR, `${iconSize}px`);
   header.style.setProperty(TAB_Y_OFFSET_VAR, state.config.tab_y_offset);
-  if (navRoot !== header) {
-    navRoot.style.setProperty(CONTROL_SIZE_VAR, `${controlSize}px`);
-    navRoot.style.setProperty(ICON_SIZE_VAR, `${iconSize}px`);
-    navRoot.style.setProperty(TAB_Y_OFFSET_VAR, state.config.tab_y_offset);
-  }
-  syncNavigationControls(navRoot, controlSize, iconSize);
-  if (navRoot !== header) {
-    window.requestAnimationFrame(() => syncNavigationControls(navRoot, controlSize, iconSize));
+  header.style.setProperty(ICON_Y_OFFSET_VAR, iconYOffset);
+  header.style.setProperty(VIEW_ICON_Y_OFFSET_VAR, viewIconYOffset);
+  header.style.setProperty(CONTENT_Y_OFFSET_VAR, contentYOffset);
+  header.style.setProperty(MENU_Y_OFFSET_VAR, "0px");
+  menuButton?.style.setProperty(MENU_Y_OFFSET_VAR, menuYOffset);
+  menuButton?.style.setProperty(ICON_Y_OFFSET_VAR, menuIconYOffset);
+  menuButton?.style.setProperty("position", "relative", "important");
+  menuButton?.style.setProperty("top", menuYOffset, "important");
+
+  if (tabGroup) {
+    tabGroup.style.setProperty(TAB_Y_OFFSET_VAR, controlYOffset);
+    tabGroup.style.setProperty(ICON_Y_OFFSET_VAR, iconYOffset);
+    tabGroup.style.setProperty(VIEW_ICON_Y_OFFSET_VAR, viewIconYOffset);
+    tabGroup.style.setProperty(CONTENT_Y_OFFSET_VAR, contentYOffset);
+    tabGroup.style.setProperty(MENU_Y_OFFSET_VAR, "0px");
+    setViewTabIconOffset(header, tabGroup, viewIconYOffset);
   }
 }
 
 function clearHeaderMetrics(header) {
-  restoreDock(header);
-  removeGeneratedIconsFor(document);
-  clearInlineStylesForHeader(header);
+  const tabGroup = findTabGroup(header);
+  clearActionMenuPlacement(header);
+  clearViewTabIconOffset(header, tabGroup);
+  clearDockContentCenter(header);
+  header.querySelector(`[${NAV_PART_ATTR}="menu"]`)?.style.removeProperty(ICON_Y_OFFSET_VAR);
+  header.querySelector(`[${NAV_PART_ATTR}="menu"]`)?.style.removeProperty(MENU_Y_OFFSET_VAR);
+  header.querySelector(`[${NAV_PART_ATTR}="menu"]`)?.style.removeProperty("top");
   header.style.removeProperty(CONTROL_SIZE_VAR);
   header.style.removeProperty(ICON_SIZE_VAR);
   header.style.removeProperty(TAB_Y_OFFSET_VAR);
-}
-
-function suspendHeaderMetrics(header) {
-  suspendDock(header);
-  clearInlineStylesForHeader(header);
-  header.style.removeProperty(CONTROL_SIZE_VAR);
-  header.style.removeProperty(ICON_SIZE_VAR);
-  header.style.removeProperty(TAB_Y_OFFSET_VAR);
+  header.style.removeProperty(ICON_Y_OFFSET_VAR);
+  header.style.removeProperty(VIEW_ICON_Y_OFFSET_VAR);
+  header.style.removeProperty(CONTENT_Y_OFFSET_VAR);
+  header.style.removeProperty(MENU_Y_OFFSET_VAR);
+  tabGroup?.style.removeProperty(TAB_Y_OFFSET_VAR);
+  tabGroup?.style.removeProperty(ICON_Y_OFFSET_VAR);
+  tabGroup?.style.removeProperty(VIEW_ICON_Y_OFFSET_VAR);
+  tabGroup?.style.removeProperty(CONTENT_Y_OFFSET_VAR);
+  tabGroup?.style.removeProperty(MENU_Y_OFFSET_VAR);
+  clearNavPartMarkers(header);
 }
 
 function allowsCurrentRoute() {
@@ -2579,29 +2655,39 @@ function allowsCurrentRoute() {
 function hasNavigationTabs(element) {
   if (!element || !element.querySelector) return false;
   return Boolean(
-    element.querySelector("ha-tabs, ha-tab-group, paper-tabs, mwc-tab-bar, [role='tablist']")
+    element.querySelector("ha-tabs, ha-tab-group, sl-tab-group, wa-tab-group, paper-tabs, mwc-tab-bar, [role='tablist']")
   );
+}
+
+function elementEditModeValue(element) {
+  if (!element) return false;
+  try {
+    return Boolean(element.lovelace?.editMode || element._lovelace?.editMode || element.editMode || element._editMode);
+  } catch (_error) {
+    return false;
+  }
+}
+
+function isDashboardEditMode(header) {
+  if (!header) return false;
+  if (closestComposed(header, ".edit-mode")) return true;
+  return elementEditModeValue(closestComposed(header, "hui-root")) ||
+    elementEditModeValue(closestComposed(header, "ha-panel-lovelace"));
 }
 
 function updateMarkedHeaders(root, routeEnabled) {
   for (const header of rootQuerySelectorAll(root, `.header, [${NAV_ATTR}]`)) {
-    if (routeEnabled && header.classList?.contains("header") && isDashboardEditMode(header)) {
-      suspendHeaderMetrics(header);
-      header.removeAttribute(NAV_ATTR);
-      continue;
-    }
-
-    const dockRecord = state.docks.get(header);
     const shouldMark =
       routeEnabled &&
       header.classList?.contains("header") &&
-      (hasNavigationTabs(header) || Boolean(dockRecord?.items?.size));
+      !isDashboardEditMode(header) &&
+      hasNavigationTabs(header);
     if (shouldMark) {
       header.setAttribute(NAV_ATTR, "");
       syncHeaderMetrics(header);
     } else {
-      clearHeaderMetrics(header);
       header.removeAttribute(NAV_ATTR);
+      clearHeaderMetrics(header);
     }
   }
 }
@@ -2621,30 +2707,35 @@ function hasDashboardView(root) {
 }
 
 function isMarkedTabShadowRoot(root) {
-  return isShadowRootFor(root, TAB_SHADOW_HOSTS) && closestComposed(root.host, `.header[${NAV_ATTR}], [${DOCK_ATTR}]`);
+  return isShadowRootFor(root, TAB_SHADOW_HOSTS) && closestComposed(root.host, `.header[${NAV_ATTR}]`);
 }
 
 function isMarkedTabGroupShadowRoot(root) {
-  return isShadowRootFor(root, TAB_GROUP_SHADOW_HOSTS) && closestComposed(root.host, `.header[${NAV_ATTR}], [${DOCK_ATTR}]`);
+  return isShadowRootFor(root, TAB_GROUP_SHADOW_HOSTS) && closestComposed(root.host, `.header[${NAV_ATTR}]`);
 }
 
 function isMarkedButtonShadowRoot(root) {
-  return isShadowRootFor(root, BUTTON_SHADOW_HOSTS) && closestComposed(root.host, `.header[${NAV_ATTR}], [${DOCK_ATTR}]`);
+  return isShadowRootFor(root, BUTTON_SHADOW_HOSTS) && closestComposed(root.host, `.header[${NAV_ATTR}]`);
 }
 
-function rootCss(root, cssText, tabShadowCss, tabGroupShadowCss, buttonShadowCss, routeEnabled) {
+function isMarkedIconShadowRoot(root) {
+  return isShadowRootFor(root, ICON_SHADOW_HOSTS) && closestComposed(root.host, `.header[${NAV_ATTR}]`);
+}
+
+function rootCss(root, cssText, tabShadowCss, tabGroupShadowCss, buttonShadowCss, iconShadowCss, routeEnabled) {
   if (!routeEnabled) return "";
   if (isShadowRootFor(root, TAB_SHADOW_HOSTS)) return isMarkedTabShadowRoot(root) ? tabShadowCss : "";
   if (isShadowRootFor(root, TAB_GROUP_SHADOW_HOSTS)) return isMarkedTabGroupShadowRoot(root) ? tabGroupShadowCss : "";
   if (isShadowRootFor(root, BUTTON_SHADOW_HOSTS)) return isMarkedButtonShadowRoot(root) ? buttonShadowCss : "";
+  if (isShadowRootFor(root, ICON_SHADOW_HOSTS)) return isMarkedIconShadowRoot(root) ? iconShadowCss : "";
   if (hasMarkedNavigation(root) || hasDashboardView(root)) return cssText;
   return "";
 }
 
-function installStyle(root, cssText, tabShadowCss, tabGroupShadowCss, buttonShadowCss, routeEnabled) {
+function installStyle(root, cssText, tabShadowCss, tabGroupShadowCss, buttonShadowCss, iconShadowCss, routeEnabled) {
   const target = root === document ? document.head : root;
   if (!target || !target.querySelector) return;
-  const nextCssText = rootCss(root, cssText, tabShadowCss, tabGroupShadowCss, buttonShadowCss, routeEnabled);
+  const nextCssText = rootCss(root, cssText, tabShadowCss, tabGroupShadowCss, buttonShadowCss, iconShadowCss, routeEnabled);
 
   let style = target.querySelector(`#${STYLE_ID}`);
   if (!style) {
@@ -2663,13 +2754,13 @@ function observeRoot(root) {
   if (!target || state.observers.has(root)) return;
 
   const observer = new MutationObserver(() => scheduleApply());
-  observer.observe(target, { childList: true, subtree: true });
+  observer.observe(target, { attributes: true, attributeFilter: ["class"], childList: true, subtree: true });
   state.observers.set(root, observer);
 }
 
-function walkRoots(root, cssText, tabShadowCss, tabGroupShadowCss, buttonShadowCss, routeEnabled) {
+function walkRoots(root, cssText, tabShadowCss, tabGroupShadowCss, buttonShadowCss, iconShadowCss, routeEnabled) {
   updateMarkedHeaders(root, routeEnabled);
-  installStyle(root, cssText, tabShadowCss, tabGroupShadowCss, buttonShadowCss, routeEnabled);
+  installStyle(root, cssText, tabShadowCss, tabGroupShadowCss, buttonShadowCss, iconShadowCss, routeEnabled);
   observeRoot(root);
 
   const start = root === document ? document.documentElement : root;
@@ -2679,7 +2770,7 @@ function walkRoots(root, cssText, tabShadowCss, tabGroupShadowCss, buttonShadowC
   let node = walker.currentNode;
   while (node) {
     if (node.shadowRoot) {
-      walkRoots(node.shadowRoot, cssText, tabShadowCss, tabGroupShadowCss, buttonShadowCss, routeEnabled);
+      walkRoots(node.shadowRoot, cssText, tabShadowCss, tabGroupShadowCss, buttonShadowCss, iconShadowCss, routeEnabled);
     }
     node = walker.nextNode();
   }
@@ -2688,15 +2779,13 @@ function walkRoots(root, cssText, tabShadowCss, tabGroupShadowCss, buttonShadowC
 function applyStyles() {
   state.applyTimer = 0;
   const routeEnabled = allowsCurrentRoute();
-  if (!routeEnabled) {
-    clearAllInlineStyles();
-  }
   walkRoots(
     document,
     buildCss(state.config),
     buildTabShadowCss(state.config),
     buildTabGroupShadowCss(state.config),
     buildButtonShadowCss(state.config),
+    buildIconShadowCss(state.config),
     routeEnabled
   );
 }
@@ -2720,6 +2809,7 @@ function start(config) {
   scheduleApply();
   window.addEventListener("location-changed", scheduleApply);
   window.addEventListener("popstate", scheduleApply);
+  window.addEventListener("resize", scheduleApply);
   window.setInterval(scheduleApply, 2500);
 }
 
@@ -2748,7 +2838,8 @@ class HaNativeNavPosition extends HTMLElement {
   static getStubConfig() {
     return {
       position: "bottom",
-      mobile_only: true,
+      only: "all",
+      mobile_only: false,
       dock: true,
       hide_labels: true
     };
@@ -2765,8 +2856,6 @@ window.customCards.push({
   name: "HA Native Nav Position",
   description: "Move Home Assistant's native dashboard navigation to the top or bottom."
 });
-
-window.__haNativeNavPositionVersion = VERSION;
 
 start(readUrlConfig());
 

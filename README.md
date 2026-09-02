@@ -3,7 +3,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
 [![GitHub Release](https://img.shields.io/github/v/release/Philiphall6/ha-native-nav-position)](https://github.com/Philiphall6/ha-native-nav-position/releases/latest)
 
-Lovelace/HACS plugin that moves the native Home Assistant dashboard navigation to the top or bottom of the screen, with a compact mobile dock and icon-only view tabs.
+Lovelace/HACS plugin that moves the native Home Assistant dashboard navigation to the top or bottom of the screen, with a compact dock and icon-only view tabs.
 
 ![Preview](images/preview.svg)
 
@@ -43,7 +43,7 @@ After a new version is published:
 
 ## Basic Configuration
 
-By default, the plugin places the navigation bar at the bottom on mobile:
+By default, the plugin places the navigation bar at the bottom on both desktop and mobile:
 
 ```yaml
 url: /hacsfiles/ha-native-nav-position/ha-native-nav-position.js
@@ -68,26 +68,56 @@ url: /hacsfiles/ha-native-nav-position/ha-native-nav-position.js?position=top
 type: module
 ```
 
+## Display Scope
+
+Show the dock everywhere, which is the default behavior:
+
+```yaml
+url: /hacsfiles/ha-native-nav-position/ha-native-nav-position.js?only=all
+type: module
+```
+
+Show the dock only on mobile:
+
+```yaml
+url: /hacsfiles/ha-native-nav-position/ha-native-nav-position.js?only=mobile
+type: module
+```
+
+Show the dock only on desktop/web:
+
+```yaml
+url: /hacsfiles/ha-native-nav-position/ha-native-nav-position.js?only=web
+type: module
+```
+
 ## Options
 
 Options can be passed through the resource URL:
 
 ```yaml
-url: /hacsfiles/ha-native-nav-position/ha-native-nav-position.js?position=bottom&dock=true&hide_labels=true&mobile_only=true
+url: /hacsfiles/ha-native-nav-position/ha-native-nav-position.js?position=bottom&dock=true&hide_labels=true&only=all
 type: module
 ```
 
 | Option | Default | Description |
 | --- | --- | --- |
 | `position` | `bottom` | Navigation position: `bottom` or `top`. |
-| `mobile_only` | `true` | Applies the styling only below `mobile_max_width`. |
+| `only` | `all` | Display scope: `all`, `mobile`, or `web`. |
+| `mobile_only` | `false` | Legacy alias. Set to `true` to behave like `only=mobile`. |
 | `mobile_max_width` | `768px` | Maximum width for mobile mode. |
 | `dock` | `true` | Enables the floating dock style. |
 | `hide_labels` | `true` | Hides navigation labels. |
 | `compact` | `true` | Uses a 48px touch target with a 24px icon, matching native Home Assistant buttons. |
 | `offset` | `18px` | Distance from the top or bottom edge. |
 | `height` | `64px` | Dock height. |
-| `tab_y_offset` | `0px` | Vertical offset for dashboard view icons. Keep `0px` to align them with the native menu and overflow buttons. |
+| `tab_y_offset` | `0px` | Vertical offset for the dashboard view tab container. Keep `0px` unless the whole view group must move. |
+| `ios_content_y_offset` | `-24px` | Optional iPhone/iPad vertical offset for the view icons and side action icons. |
+| `ios_menu_y_offset` | `-16px` | Optional iPhone/iPad vertical offset for the burger button only. |
+| `ios_menu_icon_y_offset` | `-4px` | Optional iPhone/iPad vertical offset for the burger glyph inside the button. |
+| `ios_icon_y_offset` | `0px` | Optional iPhone/iPad vertical offset for side action icon glyphs. The dock itself stays fixed. |
+| `ios_view_icon_y_offset` | `0px` | Optional iPhone/iPad vertical offset for dashboard view icon glyphs. |
+| `ios_bottom_offset` | `8px` | iPhone/iPad bottom distance. Lower values move the dock closer to the bottom edge. |
 | `active_color` | `var(--accent-color, var(--primary-color))` | Active view icon color, inherited from the current Home Assistant theme. |
 | `inactive_color` | `rgba(255, 255, 255, 0.78)` | Inactive view icon color. |
 
@@ -114,7 +144,7 @@ If you want to override the configuration from a dashboard view, add this card t
 ```yaml
 type: custom:ha-native-nav-position
 position: bottom
-mobile_only: true
+only: all
 dock: true
 hide_labels: true
 ```
