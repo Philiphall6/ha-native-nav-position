@@ -87,6 +87,7 @@ type: module
 | `compact` | `true` | Uses a 48px touch target with a 24px icon, matching native Home Assistant buttons. |
 | `offset` | `18px` | Distance from the top or bottom edge. |
 | `height` | `64px` | Dock height. |
+| `tab_y_offset` | `0px` | Vertical offset for dashboard view icons. Keep `0px` to align them with the native menu and overflow buttons. |
 | `active_color` | `var(--accent-color, var(--primary-color))` | Active view icon color, inherited from the current Home Assistant theme. |
 | `inactive_color` | `rgba(255, 255, 255, 0.78)` | Inactive view icon color. |
 

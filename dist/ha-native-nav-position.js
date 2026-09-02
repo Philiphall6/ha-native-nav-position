@@ -1,7 +1,8 @@
-const VERSION = "1.0.1";
+const VERSION = "1.0.2";
 const TAG_NAME = "ha-native-nav-position";
 const STYLE_ID = "ha-native-nav-position-style";
 const NAV_ATTR = "data-ha-native-nav-position-active";
+const INLINE_ATTR = "data-ha-native-nav-position-inline";
 const CONTROL_SIZE_VAR = "--ha-native-nav-control-size";
 const ICON_SIZE_VAR = "--ha-native-nav-icon-size";
 const TAB_Y_OFFSET_VAR = "--ha-native-nav-tab-y-offset";
@@ -25,6 +26,31 @@ const BUTTON_SHADOW_HOSTS = new Set([
   "md-icon-button",
   "wa-button"
 ]);
+const TAB_SELECTOR = "ha-tab-group-tab, paper-tab, mwc-tab, md-primary-tab, md-secondary-tab";
+const TAB_GROUP_SELECTOR = "ha-tab-group, ha-tabs, paper-tabs, mwc-tab-bar, [role='tablist']";
+const SIDE_BUTTON_SELECTOR = "ha-menu-button, ha-icon-button, app-toolbar > ha-menu-button, app-toolbar > ha-icon-button";
+const ICON_SELECTOR = "ha-icon, ha-svg-icon, wa-icon, mwc-icon, md-icon, iron-icon, svg, .ha-icon, .icon";
+const TAB_INTERNAL_SELECTOR = [
+  ".tab",
+  ".tab-active",
+  ".mdc-tab",
+  ".mdc-tab--active",
+  "button",
+  "[part~='tab']",
+  "[part~='base']",
+  "[part~='content']",
+  ".mdc-tab__content"
+].join(", ");
+const LABEL_SELECTOR = [
+  ".label",
+  "[part~='label']",
+  ".mdc-tab__content span",
+  "slot",
+  "slot[name='icon']",
+  "slot[name='prefix']",
+  "slot[name='start']"
+].join(", ");
+const TEXT_LABEL_SELECTOR = ".mdc-tab__text-label";
 const NON_DASHBOARD_PREFIXES = [
   "/config",
   "/developer-tools",
@@ -53,7 +79,7 @@ const DEFAULT_CONFIG = {
   height: "64px",
   radius: "30px",
   side_gap: "12px",
-  tab_y_offset: "13px",
+  tab_y_offset: "0px",
   bottom_padding: "128px",
   top_padding: "88px",
   background: "rgba(35, 48, 64, 0.54)",
@@ -68,6 +94,8 @@ const DEFAULT_CONFIG = {
 const state = {
   config: { ...DEFAULT_CONFIG },
   observers: new WeakMap(),
+  inlineStyles: new WeakMap(),
+  inlineElements: new Set(),
   applyTimer: 0,
   started: false
 };
@@ -1406,22 +1434,330 @@ function closestComposed(element, selector) {
   return null;
 }
 
+function setInlineStyles(element, declarations) {
+  if (!element?.style) return;
+
+  let props = state.inlineStyles.get(element);
+  if (!props) {
+    props = new Set();
+    state.inlineStyles.set(element, props);
+    state.inlineElements.add(element);
+  }
+
+  for (const [property, value] of Object.entries(declarations)) {
+    const cssProperty = property.startsWith("--") ? property : toKebab(property);
+    props.add(cssProperty);
+    element.style.setProperty(cssProperty, value, "important");
+  }
+
+  element.setAttribute?.(INLINE_ATTR, "");
+}
+
+function clearInlineStyles(element) {
+  const props = state.inlineStyles.get(element);
+  if (!props || !element?.style) return;
+
+  for (const property of props) {
+    element.style.removeProperty(property);
+  }
+
+  state.inlineStyles.delete(element);
+  state.inlineElements.delete(element);
+  element.removeAttribute?.(INLINE_ATTR);
+}
+
+function clearInlineStylesForHeader(header) {
+  for (const element of Array.from(state.inlineElements)) {
+    if (!element?.isConnected || closestComposed(element, ".header") === header) {
+      clearInlineStyles(element);
+    }
+  }
+}
+
+function clearAllInlineStyles() {
+  for (const element of Array.from(state.inlineElements)) {
+    clearInlineStyles(element);
+  }
+}
+
+function collectComposedElements(root, selector, results = new Set()) {
+  if (!root || !selector) return results;
+
+  if (root.nodeType === Node.ELEMENT_NODE && root.matches?.(selector)) {
+    results.add(root);
+  }
+
+  if (root.querySelectorAll) {
+    for (const element of root.querySelectorAll(selector)) {
+      results.add(element);
+    }
+  }
+
+  const walkerRoot = root === document ? document.documentElement : root;
+  if (!walkerRoot) return results;
+
+  const walker = document.createTreeWalker(walkerRoot, NodeFilter.SHOW_ELEMENT);
+  let node = walker.currentNode;
+  while (node) {
+    if (node.shadowRoot) {
+      collectComposedElements(node.shadowRoot, selector, results);
+    }
+    node = walker.nextNode();
+  }
+
+  return results;
+}
+
+function collectAssignedSlotElements(root, results = new Set()) {
+  if (!root?.querySelectorAll) return results;
+
+  for (const slot of root.querySelectorAll("slot")) {
+    const assigned = slot.assignedElements?.({ flatten: true }) || [];
+    for (const element of assigned) {
+      results.add(element);
+      collectComposedElements(element, ICON_SELECTOR, results);
+    }
+  }
+
+  return results;
+}
+
+function isActiveTab(tab) {
+  return Boolean(
+    tab?.hasAttribute?.("active") ||
+      tab?.hasAttribute?.("selected") ||
+      tab?.hasAttribute?.("iron-selected") ||
+      tab?.getAttribute?.("aria-selected") === "true" ||
+      tab?.getAttribute?.("aria-current") === "page" ||
+      tab?.classList?.contains("active") ||
+      tab?.classList?.contains("iron-selected")
+  );
+}
+
+function styleIconElement(icon, iconSize, color) {
+  setInlineStyles(icon, {
+    "--mdc-icon-size": iconSize,
+    width: iconSize,
+    height: iconSize,
+    minWidth: iconSize,
+    minHeight: iconSize,
+    maxWidth: iconSize,
+    maxHeight: iconSize,
+    display: "block",
+    visibility: "visible",
+    opacity: "1",
+    color,
+    fill: "currentColor",
+    stroke: "currentColor",
+    fontSize: iconSize,
+    lineHeight: "1",
+    transform: "none",
+    translate: "0 0",
+    pointerEvents: "none",
+    flex: `0 0 ${iconSize}`
+  });
+}
+
+function styleCenteredControl(element, controlSize, radius, color) {
+  setInlineStyles(element, {
+    width: controlSize,
+    height: controlSize,
+    minWidth: controlSize,
+    minHeight: controlSize,
+    maxWidth: controlSize,
+    maxHeight: controlSize,
+    padding: "0",
+    margin: "0",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    boxSizing: "border-box",
+    border: "0",
+    borderBottom: "0",
+    borderRadius: radius,
+    background: "transparent",
+    backgroundImage: "none",
+    boxShadow: "none",
+    outline: "0",
+    filter: "none",
+    backdropFilter: "none",
+    "-webkit-backdrop-filter": "none",
+    color,
+    transform: "none",
+    translate: "0 0"
+  });
+}
+
+function styleLabelContainer(element, size, color) {
+  setInlineStyles(element, {
+    width: size,
+    height: size,
+    minWidth: size,
+    minHeight: size,
+    padding: "0",
+    margin: "0",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    boxSizing: "border-box",
+    overflow: "visible",
+    fontSize: "0",
+    lineHeight: "0",
+    border: "0",
+    background: "transparent",
+    boxShadow: "none",
+    color
+  });
+}
+
+function syncIconsInRoot(root, iconSize, color) {
+  const icons = collectComposedElements(root, ICON_SELECTOR);
+  collectAssignedSlotElements(root?.shadowRoot || root, icons);
+  for (const icon of icons) {
+    styleIconElement(icon, iconSize, color);
+  }
+}
+
+function syncTabControl(tab, controlSize, iconSize, radius) {
+  const active = isActiveTab(tab);
+  const color = active ? state.config.active_color : state.config.inactive_color;
+
+  setInlineStyles(tab, {
+    "--mdc-tab-min-width": controlSize,
+    "--mdc-tab-width": controlSize,
+    "--mdc-tab-height": controlSize,
+    "--md-primary-tab-container-height": controlSize,
+    "--md-primary-tab-active-indicator-height": "0",
+    "--md-primary-tab-active-indicator-color": "transparent",
+    "--mdc-tab-indicator-active-indicator-height": "0",
+    "--mdc-tab-indicator-active-indicator-color": "transparent",
+    flex: `0 0 ${controlSize}`,
+    width: controlSize,
+    height: controlSize,
+    minWidth: controlSize,
+    minHeight: controlSize,
+    maxWidth: controlSize,
+    maxHeight: controlSize,
+    margin: "0 1px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    boxSizing: "border-box",
+    overflow: "hidden",
+    border: "0",
+    borderBottom: "0",
+    borderRadius: radius,
+    background: "transparent",
+    boxShadow: "none",
+    outline: "0",
+    color,
+    opacity: active ? "1" : "0.82",
+    transform: "none",
+    translate: "0 0",
+    touchAction: "pan-x"
+  });
+
+  const internals = collectComposedElements(tab.shadowRoot, TAB_INTERNAL_SELECTOR);
+  for (const element of internals) {
+    styleCenteredControl(element, controlSize, radius, color);
+  }
+
+  const textLabels = collectComposedElements(tab.shadowRoot, TEXT_LABEL_SELECTOR);
+  for (const label of textLabels) {
+    setInlineStyles(label, { display: "none", opacity: "0" });
+  }
+
+  const labels = collectComposedElements(tab.shadowRoot, LABEL_SELECTOR);
+  for (const label of labels) {
+    styleLabelContainer(label, label.localName === "slot" ? iconSize : "100%", color);
+  }
+
+  syncIconsInRoot(tab, iconSize, color);
+}
+
+function syncSideButton(button, controlSize, iconSize, radius) {
+  const color = state.config.inactive_color;
+  setInlineStyles(button, {
+    "--mdc-icon-button-size": controlSize,
+    "--mdc-icon-size": iconSize,
+    flex: `0 0 ${controlSize}`,
+    width: controlSize,
+    height: controlSize,
+    minWidth: controlSize,
+    minHeight: controlSize,
+    maxWidth: controlSize,
+    maxHeight: controlSize,
+    margin: "0",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radius,
+    background: "transparent",
+    boxShadow: "none",
+    outline: "0",
+    color,
+    opacity: "1",
+    transform: "none",
+    translate: "0 0"
+  });
+
+  const internals = collectComposedElements(
+    button.shadowRoot,
+    "ha-button, button, [part~='base'], [part~='button'], [part~='label'], .mdc-icon-button"
+  );
+  for (const element of internals) {
+    styleCenteredControl(element, element.matches?.("[part~='label']") ? iconSize : controlSize, radius, color);
+  }
+
+  syncIconsInRoot(button, iconSize, color);
+}
+
+function syncNavigationControls(header, controlSizeValue, iconSizeValue) {
+  const controlSize = `${controlSizeValue}px`;
+  const iconSize = `${iconSizeValue}px`;
+  const radius = `${Math.round(controlSizeValue / 2)}px`;
+
+  for (const group of header.querySelectorAll(TAB_GROUP_SELECTOR)) {
+    setInlineStyles(group, {
+      minWidth: "0",
+      width: "100%",
+      height: controlSize,
+      minHeight: controlSize,
+      overflowX: "auto",
+      overflowY: "hidden",
+      scrollbarWidth: "none",
+      touchAction: "pan-x",
+      transform: "none",
+      translate: "0 0"
+    });
+  }
+
+  for (const button of header.querySelectorAll(SIDE_BUTTON_SELECTOR)) {
+    syncSideButton(button, controlSize, iconSize, radius);
+  }
+
+  for (const tab of header.querySelectorAll(TAB_SELECTOR)) {
+    syncTabControl(tab, controlSize, iconSize, radius);
+  }
+}
+
 function syncHeaderMetrics(header) {
   const button = header.querySelector(
     "ha-menu-button, app-toolbar > ha-menu-button, ha-icon-button[slot='navigationIcon'], app-toolbar > ha-icon-button"
   );
-  if (!button) return;
 
-  const controlSize = clampNumber(sizeFromRect(button.getBoundingClientRect(), 48), 40, 56);
-  const icon = findButtonIcon(button);
+  const controlSize = clampNumber(sizeFromRect(button?.getBoundingClientRect(), 48), 40, 56);
+  const icon = button ? findButtonIcon(button) : null;
   const iconSize = clampNumber(sizeFromRect(icon?.getBoundingClientRect(), Math.round(controlSize / 2)), 20, 30);
 
   header.style.setProperty(CONTROL_SIZE_VAR, `${controlSize}px`);
   header.style.setProperty(ICON_SIZE_VAR, `${iconSize}px`);
   header.style.setProperty(TAB_Y_OFFSET_VAR, state.config.tab_y_offset);
+  syncNavigationControls(header, controlSize, iconSize);
 }
 
 function clearHeaderMetrics(header) {
+  clearInlineStylesForHeader(header);
   header.style.removeProperty(CONTROL_SIZE_VAR);
   header.style.removeProperty(ICON_SIZE_VAR);
   header.style.removeProperty(TAB_Y_OFFSET_VAR);
@@ -1448,8 +1784,8 @@ function updateMarkedHeaders(root, routeEnabled) {
       header.setAttribute(NAV_ATTR, "");
       syncHeaderMetrics(header);
     } else {
-      header.removeAttribute(NAV_ATTR);
       clearHeaderMetrics(header);
+      header.removeAttribute(NAV_ATTR);
     }
   }
 }
@@ -1536,6 +1872,9 @@ function walkRoots(root, cssText, tabShadowCss, tabGroupShadowCss, buttonShadowC
 function applyStyles() {
   state.applyTimer = 0;
   const routeEnabled = allowsCurrentRoute();
+  if (!routeEnabled) {
+    clearAllInlineStyles();
+  }
   walkRoots(
     document,
     buildCss(state.config),
@@ -1610,6 +1949,8 @@ window.customCards.push({
   name: "HA Native Nav Position",
   description: "Move Home Assistant's native dashboard navigation to the top or bottom."
 });
+
+window.__haNativeNavPositionVersion = VERSION;
 
 start(readUrlConfig());
 
