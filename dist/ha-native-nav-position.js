@@ -1,4 +1,4 @@
-const VERSION = "1.0.0";
+const VERSION = "1.0.1";
 const TAG_NAME = "ha-native-nav-position";
 const STYLE_ID = "ha-native-nav-position-style";
 const NAV_ATTR = "data-ha-native-nav-position-active";
@@ -249,6 +249,7 @@ function buildTabCss(config) {
     }
 
     ${headerSelector} ha-tab-group-tab::part(base),
+    ${headerSelector} ha-tab-group-tab::part(tab),
     ${headerSelector} ha-tab-group-tab[class~="icon-only"]::part(base) {
       width: ${controlSize} !important;
       min-width: ${controlSize} !important;
@@ -280,10 +281,15 @@ function buildTabCss(config) {
     }
 
     ${headerSelector} ha-tab-group-tab[active]::part(base),
+    ${headerSelector} ha-tab-group-tab[active]::part(tab),
     ${headerSelector} ha-tab-group-tab[aria-selected="true"]::part(base),
+    ${headerSelector} ha-tab-group-tab[aria-selected="true"]::part(tab),
     ${headerSelector} ha-tab-group-tab[aria-current="page"]::part(base),
+    ${headerSelector} ha-tab-group-tab[aria-current="page"]::part(tab),
     ${headerSelector} ha-tab-group-tab[selected]::part(base),
+    ${headerSelector} ha-tab-group-tab[selected]::part(tab),
     ${headerSelector} ha-tab-group-tab.active::part(base),
+    ${headerSelector} ha-tab-group-tab.active::part(tab),
     ${headerSelector} ha-tab-group-tab.iron-selected::part(base) {
       background: ${config.active_background} !important;
       border: 0 !important;
@@ -298,10 +304,25 @@ function buildTabCss(config) {
       outline: 0 !important;
     }
 
-    ${headerSelector} ha-tab-group-tab .mdc-tab__text-label,
+    ${headerSelector} ha-tab-group-tab .mdc-tab__text-label {
+      display: none !important;
+    }
+
     ${headerSelector} ha-tab-group-tab .mdc-tab__content span,
     ${headerSelector} ha-tab-group-tab .label {
-      display: none !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      width: 100% !important;
+      height: 100% !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      font-size: 0 !important;
+      line-height: 0 !important;
+      color: inherit !important;
+      background: transparent !important;
+      border: 0 !important;
+      box-shadow: none !important;
     }
 
     ${headerSelector} ha-tab-group-tab .mdc-tab,
@@ -351,6 +372,27 @@ function buildTabCss(config) {
       translate: 0 0 !important;
       transition: color 140ms ease, opacity 140ms ease !important;
       pointer-events: none !important;
+    }
+
+    ${headerSelector} ha-tab-group-tab .mdc-tab__content span > ha-icon,
+    ${headerSelector} ha-tab-group-tab .mdc-tab__content span > ha-svg-icon,
+    ${headerSelector} ha-tab-group-tab .mdc-tab__content span > svg,
+    ${headerSelector} ha-tab-group-tab .label > ha-icon,
+    ${headerSelector} ha-tab-group-tab .label > ha-svg-icon,
+    ${headerSelector} ha-tab-group-tab .label > svg {
+      --mdc-icon-size: ${iconSize} !important;
+      width: ${iconSize} !important;
+      height: ${iconSize} !important;
+      min-width: ${iconSize} !important;
+      min-height: ${iconSize} !important;
+      display: block !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+      color: inherit !important;
+      fill: currentColor !important;
+      stroke: currentColor !important;
+      font-size: ${iconSize} !important;
+      line-height: 1 !important;
     }
 
     ${headerSelector} ha-tab-group-tab[active] ha-icon,
@@ -521,6 +563,33 @@ function buildTabShadowCss(config) {
       transition: color 140ms ease, opacity 140ms ease !important;
     }
 
+    [part~="tab"],
+    [part~="base"] {
+      width: 100% !important;
+      height: ${controlSize} !important;
+      min-height: ${controlSize} !important;
+      max-height: ${controlSize} !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      border-radius: ${controlRadius} !important;
+      background: transparent !important;
+      background-image: none !important;
+      border: 0 !important;
+      border-block: 0 !important;
+      border-inline: 0 !important;
+      border-bottom-width: 0 !important;
+      border-bottom-color: transparent !important;
+      border-color: transparent !important;
+      box-shadow: none !important;
+      outline: 0 !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      box-sizing: border-box !important;
+      transform: none !important;
+      translate: 0 0 !important;
+    }
+
     :host::before,
     :host::after {
       display: none !important;
@@ -572,16 +641,34 @@ function buildTabShadowCss(config) {
       box-sizing: border-box !important;
     }
 
-    .mdc-tab__text-label,
+    .mdc-tab__text-label {
+      display: none !important;
+    }
+
     .mdc-tab__content span,
     .label,
     [part~="label"] {
-      display: none !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      width: 100% !important;
+      height: 100% !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      font-size: 0 !important;
+      line-height: 0 !important;
+      color: inherit !important;
+      background: transparent !important;
+      border: 0 !important;
+      box-shadow: none !important;
+      overflow: visible !important;
     }
 
     ha-icon,
     ha-svg-icon,
+    wa-icon,
     .ha-icon,
+    .icon,
     slot[name="icon"] {
       --mdc-icon-size: ${iconSize};
       width: ${iconSize} !important;
@@ -590,6 +677,46 @@ function buildTabShadowCss(config) {
       min-height: ${iconSize} !important;
       margin: 0 !important;
       color: inherit !important;
+      line-height: 1 !important;
+      transform: none !important;
+      translate: 0 0 !important;
+      pointer-events: none !important;
+    }
+
+    slot,
+    slot[name="icon"],
+    slot[name="prefix"],
+    slot[name="start"] {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      width: ${iconSize} !important;
+      height: ${iconSize} !important;
+      min-width: ${iconSize} !important;
+      min-height: ${iconSize} !important;
+      color: inherit !important;
+      font-size: 0 !important;
+      line-height: 0 !important;
+    }
+
+    slot::slotted(ha-icon),
+    slot::slotted(ha-svg-icon),
+    slot::slotted(wa-icon),
+    slot::slotted(svg),
+    slot::slotted(.ha-icon),
+    slot::slotted(.icon) {
+      --mdc-icon-size: ${iconSize} !important;
+      width: ${iconSize} !important;
+      height: ${iconSize} !important;
+      min-width: ${iconSize} !important;
+      min-height: ${iconSize} !important;
+      display: block !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+      color: inherit !important;
+      fill: currentColor !important;
+      stroke: currentColor !important;
+      font-size: ${iconSize} !important;
       line-height: 1 !important;
       transform: none !important;
       translate: 0 0 !important;
@@ -845,6 +972,35 @@ function buildButtonShadowCss(config) {
       box-sizing: border-box !important;
     }
 
+    ha-button::part(base),
+    ha-button::part(button),
+    ha-button::part(label),
+    ha-button::part(start),
+    ha-button::part(end) {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      color: inherit !important;
+      background: transparent !important;
+      border: 0 !important;
+      box-shadow: none !important;
+      outline: 0 !important;
+      overflow: visible !important;
+    }
+
+    ha-button::part(label),
+    ha-button::part(start),
+    ha-button::part(end) {
+      width: ${iconSize} !important;
+      height: ${iconSize} !important;
+      min-width: ${iconSize} !important;
+      min-height: ${iconSize} !important;
+      font-size: ${iconSize} !important;
+      line-height: 1 !important;
+    }
+
     :host::before,
     :host::after,
     ha-button::before,
@@ -877,8 +1033,10 @@ function buildButtonShadowCss(config) {
 
     ha-icon,
     ha-svg-icon,
+    wa-icon,
     svg,
     .ha-icon,
+    .icon,
     .mdc-icon-button__icon,
     [part~="label"] {
       --mdc-icon-size: ${iconSize} !important;
@@ -888,6 +1046,46 @@ function buildButtonShadowCss(config) {
       min-height: ${iconSize} !important;
       margin: 0 !important;
       color: inherit !important;
+      line-height: 1 !important;
+      transform: none !important;
+      translate: 0 0 !important;
+    }
+
+    span,
+    slot {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      width: ${iconSize} !important;
+      height: ${iconSize} !important;
+      min-width: ${iconSize} !important;
+      min-height: ${iconSize} !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      color: inherit !important;
+      font-size: 0 !important;
+      line-height: 0 !important;
+      overflow: visible !important;
+    }
+
+    slot::slotted(ha-icon),
+    slot::slotted(ha-svg-icon),
+    slot::slotted(wa-icon),
+    slot::slotted(svg),
+    slot::slotted(.ha-icon),
+    slot::slotted(.icon) {
+      --mdc-icon-size: ${iconSize} !important;
+      width: ${iconSize} !important;
+      height: ${iconSize} !important;
+      min-width: ${iconSize} !important;
+      min-height: ${iconSize} !important;
+      display: block !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+      color: inherit !important;
+      fill: currentColor !important;
+      stroke: currentColor !important;
+      font-size: ${iconSize} !important;
       line-height: 1 !important;
       transform: none !important;
       translate: 0 0 !important;
@@ -996,6 +1194,8 @@ function buildHeaderCss(config) {
       background: transparent !important;
       box-shadow: none !important;
       outline: 0 !important;
+      color: ${config.inactive_color} !important;
+      opacity: 1 !important;
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
@@ -1017,6 +1217,50 @@ function buildHeaderCss(config) {
       box-shadow: none !important;
       outline: 0 !important;
     }
+
+    ${headerSelector} ha-menu-button::part(label),
+    ${headerSelector} ha-icon-button::part(label),
+    ${headerSelector} app-toolbar > ha-menu-button::part(label),
+    ${headerSelector} app-toolbar > ha-icon-button::part(label) {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      width: ${iconSize} !important;
+      height: ${iconSize} !important;
+      min-width: ${iconSize} !important;
+      min-height: ${iconSize} !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      color: inherit !important;
+      overflow: visible !important;
+    }
+
+    ${headerSelector} ha-menu-button ha-icon,
+    ${headerSelector} ha-menu-button ha-svg-icon,
+    ${headerSelector} ha-menu-button svg,
+    ${headerSelector} ha-icon-button ha-icon,
+    ${headerSelector} ha-icon-button ha-svg-icon,
+    ${headerSelector} ha-icon-button svg,
+    ${headerSelector} app-toolbar > ha-menu-button ha-icon,
+    ${headerSelector} app-toolbar > ha-menu-button ha-svg-icon,
+    ${headerSelector} app-toolbar > ha-menu-button svg,
+    ${headerSelector} app-toolbar > ha-icon-button ha-icon,
+    ${headerSelector} app-toolbar > ha-icon-button ha-svg-icon,
+    ${headerSelector} app-toolbar > ha-icon-button svg {
+      --mdc-icon-size: ${iconSize} !important;
+      width: ${iconSize} !important;
+      height: ${iconSize} !important;
+      min-width: ${iconSize} !important;
+      min-height: ${iconSize} !important;
+      display: block !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+      color: inherit !important;
+      fill: currentColor !important;
+      stroke: currentColor !important;
+      transform: none !important;
+      translate: 0 0 !important;
+    }
   `;
 
   if (config.position === "top") {
@@ -1027,6 +1271,7 @@ function buildHeaderCss(config) {
         bottom: auto !important;
         z-index: ${config.z_index} !important;
         transform: translateZ(0) !important;
+        color: ${config.inactive_color} !important;
         ${dockCss}
       }
 
@@ -1061,6 +1306,7 @@ function buildHeaderCss(config) {
       bottom: calc(${config.offset} + env(safe-area-inset-bottom)) !important;
       z-index: ${config.z_index} !important;
       transform: translateZ(0) !important;
+      color: ${config.inactive_color} !important;
       ${dockCss}
     }
 
