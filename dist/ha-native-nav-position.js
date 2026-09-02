@@ -1,4 +1,4 @@
-const VERSION = "1.0.5";
+const VERSION = "1.0.6";
 const TAG_NAME = "ha-native-nav-position";
 const STYLE_ID = "ha-native-nav-position-style";
 const NAV_ATTR = "data-ha-native-nav-position-active";
@@ -1706,7 +1706,17 @@ function findSourceToolbar(header) {
 
 function getDockRecord(header) {
   let record = state.docks.get(header);
-  if (record?.dock?.isConnected && record?.toolbar?.isConnected) return record;
+  if (record?.dock && record?.toolbar) {
+    if (!record.dock.isConnected) {
+      const parent = header.parentNode;
+      if (parent) {
+        parent.insertBefore(record.dock, header.nextSibling);
+      } else {
+        document.body.appendChild(record.dock);
+      }
+    }
+    return record;
+  }
 
   const dock = document.createElement("div");
   dock.setAttribute(DOCK_ATTR, "");
@@ -1780,6 +1790,12 @@ function restoreDock(header) {
   record.dock.remove();
   state.docks.delete(header);
   state.dockHeaders.delete(header);
+}
+
+function suspendDock(header) {
+  const record = state.docks.get(header);
+  if (!record) return;
+  record.dock.remove();
 }
 
 function restoreAllDocks() {
@@ -1990,6 +2006,75 @@ function fallbackIconName(tab, index) {
   return "mdi:view-dashboard-outline";
 }
 
+function dashboardEditModeFromUrl() {
+  let url;
+  try {
+    url = new URL(window.location.href);
+  } catch (_error) {
+    return false;
+  }
+
+  return ["edit", "edit_mode", "editMode"].some((key) => {
+    const value = url.searchParams.get(key);
+    return value !== null && value !== "0" && value !== "false";
+  });
+}
+
+function elementActionText(element) {
+  const parts = [
+    element.getAttribute?.("aria-label"),
+    element.getAttribute?.("title"),
+    element.getAttribute?.("label"),
+    element.getAttribute?.("icon"),
+    element.textContent
+  ];
+
+  for (const child of element.querySelectorAll?.("ha-icon, ha-svg-icon, mwc-icon, md-icon, iron-icon") || []) {
+    parts.push(child.getAttribute("icon"), child.textContent);
+  }
+
+  if (element.shadowRoot) {
+    for (const child of element.shadowRoot.querySelectorAll("ha-icon, ha-svg-icon, mwc-icon, md-icon, iron-icon, [aria-label], [title]")) {
+      parts.push(child.getAttribute("aria-label"), child.getAttribute("title"), child.getAttribute("icon"), child.textContent);
+    }
+  }
+
+  return normalizeLabel(parts.filter(Boolean).join(" "));
+}
+
+function hasEditModeHints(root) {
+  if (!root?.querySelectorAll) return false;
+
+  const actions = Array.from(
+    root.querySelectorAll("ha-icon-button, ha-button-menu, ha-button, mwc-button, md-button, button")
+  );
+  const text = actions.map(elementActionText).join(" ");
+
+  if (/\b(done|finish|terminer|modifier le tableau|edit dashboard|take control|prendre le controle)\b/.test(text)) {
+    return true;
+  }
+
+  const editActionCount = actions.filter((element) =>
+    /\b(undo|redo|annuler|retablir|help|aide|plus|add|ajouter|pencil|edit|modifier|check|done|terminer)\b|mdi:(undo|redo|help|plus|pencil|check)/.test(
+      elementActionText(element)
+    )
+  ).length;
+
+  return editActionCount >= 3 && !hasNavigationTabs(root);
+}
+
+function isDashboardEditMode(header) {
+  if (dashboardEditModeFromUrl()) return true;
+
+  const source = findSourceToolbar(header);
+  if (hasEditModeHints(source)) return true;
+
+  const dockRecord = state.docks.get(header);
+  if (dockRecord?.dock && hasEditModeHints(dockRecord.dock)) return true;
+
+  return false;
+}
+
 function hasRealTabIcon(tab) {
   return Array.from(collectComposedElements(tab, ICON_SELECTOR)).some(
     (element) => !closestComposed(element, `[${FALLBACK_ICON_ATTR}]`)
@@ -1997,14 +2082,19 @@ function hasRealTabIcon(tab) {
 }
 
 function fallbackIconContainer(tab) {
-  return (
-    tab.shadowRoot?.querySelector(".mdc-tab__content span, .label, [part~='label'], .mdc-tab__content, [part~='content'], button, .mdc-tab") ||
-    tab
-  );
+  return tab;
+}
+
+function fallbackIconSlot(tab) {
+  const slot =
+    tab.shadowRoot?.querySelector("slot[name='icon']") ||
+    tab.shadowRoot?.querySelector("slot[name='prefix']") ||
+    tab.shadowRoot?.querySelector("slot[name='start']");
+  return slot?.name || "";
 }
 
 function ensureFallbackTabIcon(tab, index, iconSize, color) {
-  const generated = tab.shadowRoot?.querySelector(`[${FALLBACK_ICON_ATTR}]`) || tab.querySelector?.(`[${FALLBACK_ICON_ATTR}]`);
+  const generated = tab.querySelector?.(`[${FALLBACK_ICON_ATTR}]`);
   if (hasRealTabIcon(tab)) {
     removeGeneratedIcon(generated);
     return;
@@ -2018,6 +2108,8 @@ function ensureFallbackTabIcon(tab, index, iconSize, color) {
     icon.setAttribute("aria-hidden", "true");
     icon.setAttribute("icon", name);
     icon.dataset.icon = name.replace(/^mdi:/, "");
+    const slotName = fallbackIconSlot(tab);
+    if (slotName) icon.setAttribute("slot", slotName);
     fallbackIconContainer(tab).appendChild(icon);
     state.generatedIcons.add(icon);
   }
@@ -2136,7 +2228,7 @@ function syncToolbarContainer(container) {
     alignItems: "center",
     justifyContent: "center",
     boxSizing: "border-box",
-    overflow: "hidden",
+    overflow: "visible",
     background: "transparent",
     border: "0",
     borderBottom: "0",
@@ -2281,16 +2373,32 @@ function syncDockContentAlignment(navRoot) {
   }
 }
 
+function tabControlSizeForGroup(group, controlSizeValue) {
+  const tabs = Array.from(group.querySelectorAll(TAB_SELECTOR));
+  if (!tabs.length) return controlSizeValue;
+
+  const rect = group.getBoundingClientRect();
+  if (!Number.isFinite(rect.width) || rect.width <= 0) return controlSizeValue;
+
+  const fitted = Math.floor(rect.width / tabs.length);
+  return clampNumber(Math.min(controlSizeValue, fitted), 40, controlSizeValue);
+}
+
 function syncNavigationControls(header, controlSizeValue, iconSizeValue) {
   const controlSize = `${controlSizeValue}px`;
   const iconSize = `${iconSizeValue}px`;
   const radius = `${Math.round(controlSizeValue / 2)}px`;
+  const styledTabs = new Set();
 
   for (const container of header.querySelectorAll(TOOLBAR_CONTAINER_SELECTOR)) {
     syncToolbarContainer(container);
   }
 
   for (const group of header.querySelectorAll(TAB_GROUP_SELECTOR)) {
+    const tabControlSizeValue = tabControlSizeForGroup(group, controlSizeValue);
+    const tabControlSize = `${tabControlSizeValue}px`;
+    const tabRadius = `${Math.round(tabControlSizeValue / 2)}px`;
+
     setInlineStyles(group, {
       minWidth: "0",
       width: "100%",
@@ -2304,6 +2412,11 @@ function syncNavigationControls(header, controlSizeValue, iconSizeValue) {
       translate: "0 0"
     });
     syncTabGroupInternals(group, controlSize);
+
+    Array.from(group.querySelectorAll(TAB_SELECTOR)).forEach((tab, index) => {
+      syncTabControl(tab, tabControlSize, iconSize, tabRadius, index);
+      styledTabs.add(tab);
+    });
     syncTabGroupScroll(group);
   }
 
@@ -2312,6 +2425,7 @@ function syncNavigationControls(header, controlSizeValue, iconSizeValue) {
   }
 
   Array.from(header.querySelectorAll(TAB_SELECTOR)).forEach((tab, index) => {
+    if (styledTabs.has(tab)) return;
     syncTabControl(tab, controlSize, iconSize, radius, index);
   });
 
@@ -2351,6 +2465,14 @@ function clearHeaderMetrics(header) {
   header.style.removeProperty(TAB_Y_OFFSET_VAR);
 }
 
+function suspendHeaderMetrics(header) {
+  suspendDock(header);
+  clearInlineStylesForHeader(header);
+  header.style.removeProperty(CONTROL_SIZE_VAR);
+  header.style.removeProperty(ICON_SIZE_VAR);
+  header.style.removeProperty(TAB_Y_OFFSET_VAR);
+}
+
 function allowsCurrentRoute() {
   const path = window.location?.pathname || "";
   return !NON_DASHBOARD_PREFIXES.some(
@@ -2367,6 +2489,12 @@ function hasNavigationTabs(element) {
 
 function updateMarkedHeaders(root, routeEnabled) {
   for (const header of rootQuerySelectorAll(root, `.header, [${NAV_ATTR}]`)) {
+    if (routeEnabled && header.classList?.contains("header") && isDashboardEditMode(header)) {
+      suspendHeaderMetrics(header);
+      header.removeAttribute(NAV_ATTR);
+      continue;
+    }
+
     const dockRecord = state.docks.get(header);
     const shouldMark =
       routeEnabled &&
