@@ -1,4 +1,4 @@
-const VERSION = "1.0.6";
+const VERSION = "1.0.7";
 const TAG_NAME = "ha-native-nav-position";
 const STYLE_ID = "ha-native-nav-position-style";
 const NAV_ATTR = "data-ha-native-nav-position-active";
@@ -33,6 +33,7 @@ const BUTTON_SHADOW_HOSTS = new Set([
 const TAB_SELECTOR = "ha-tab-group-tab, paper-tab, mwc-tab, md-primary-tab, md-secondary-tab";
 const TAB_GROUP_SELECTOR = "ha-tab-group, ha-tabs, paper-tabs, mwc-tab-bar, [role='tablist']";
 const DOCK_TOOLBAR_CLASS = "ha-native-nav-position-toolbar";
+const MIN_COMPACT_TAB_CONTROL_SIZE = 34;
 const TOOLBAR_CONTAINER_SELECTOR = `.toolbar, app-toolbar, ha-tabs, .${DOCK_TOOLBAR_CLASS}`;
 const DOCK_ALIGN_SELECTOR = "ha-menu-button, ha-icon-button, ha-button-menu, ha-tab-group, ha-tabs, paper-tabs, mwc-tab-bar, [role='tablist']";
 const SIDE_BUTTON_SELECTOR = "ha-menu-button, ha-icon-button, ha-button-menu, app-toolbar > ha-menu-button, app-toolbar > ha-icon-button, app-toolbar > ha-button-menu";
@@ -2119,7 +2120,7 @@ function ensureFallbackTabIcon(tab, index, iconSize, color) {
   styleIconElement(icon, iconSize, color);
 }
 
-function syncTabControl(tab, controlSize, iconSize, radius, index = 0) {
+function syncTabControl(tab, controlSize, iconSize, radius, index = 0, margin = "0 1px") {
   const active = isActiveTab(tab);
   const color = active ? state.config.active_color : state.config.inactive_color;
 
@@ -2139,7 +2140,7 @@ function syncTabControl(tab, controlSize, iconSize, radius, index = 0) {
     minHeight: controlSize,
     maxWidth: controlSize,
     maxHeight: controlSize,
-    margin: "0 1px",
+    margin,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -2295,7 +2296,11 @@ function syncTabGroupScroll(group) {
   const groupRect = group.getBoundingClientRect();
   const totalWidth = tabs.reduce((sum, tab) => {
     const rect = tab.getBoundingClientRect();
-    return sum + (Number.isFinite(rect.width) && rect.width > 0 ? rect.width : 48);
+    const style = window.getComputedStyle?.(tab);
+    const marginLeft = parseFloat(style?.marginLeft || "0") || 0;
+    const marginRight = parseFloat(style?.marginRight || "0") || 0;
+    const width = Number.isFinite(rect.width) && rect.width > 0 ? rect.width : 48;
+    return sum + width + marginLeft + marginRight;
   }, 0);
 
   if (totalWidth > groupRect.width + 4) return;
@@ -2381,7 +2386,7 @@ function tabControlSizeForGroup(group, controlSizeValue) {
   if (!Number.isFinite(rect.width) || rect.width <= 0) return controlSizeValue;
 
   const fitted = Math.floor(rect.width / tabs.length);
-  return clampNumber(Math.min(controlSizeValue, fitted), 40, controlSizeValue);
+  return clampNumber(Math.min(controlSizeValue, fitted), MIN_COMPACT_TAB_CONTROL_SIZE, controlSizeValue);
 }
 
 function syncNavigationControls(header, controlSizeValue, iconSizeValue) {
@@ -2414,7 +2419,7 @@ function syncNavigationControls(header, controlSizeValue, iconSizeValue) {
     syncTabGroupInternals(group, controlSize);
 
     Array.from(group.querySelectorAll(TAB_SELECTOR)).forEach((tab, index) => {
-      syncTabControl(tab, tabControlSize, iconSize, tabRadius, index);
+      syncTabControl(tab, tabControlSize, iconSize, tabRadius, index, tabControlSizeValue < controlSizeValue ? "0" : "0 1px");
       styledTabs.add(tab);
     });
     syncTabGroupScroll(group);
