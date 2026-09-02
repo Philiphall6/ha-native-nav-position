@@ -1973,6 +1973,50 @@ function collectViewTabs(root) {
   return Array.from(root.querySelectorAll(VIEW_TAB_SELECTOR));
 }
 
+function collectTabGroupViewTabs(tabGroup) {
+  return Array.from(new Set([
+    ...collectViewTabs(tabGroup),
+    ...collectViewTabs(tabGroup?.shadowRoot)
+  ]));
+}
+
+function isActiveViewTab(tab) {
+  if (!tab) return false;
+  if (
+    tab.hasAttribute?.("active") ||
+    tab.hasAttribute?.("selected") ||
+    tab.classList?.contains("active") ||
+    tab.classList?.contains("iron-selected")
+  ) {
+    return true;
+  }
+  if (tab.getAttribute?.("aria-selected") === "true" || tab.getAttribute?.("aria-current") === "page") {
+    return true;
+  }
+
+  try {
+    return Boolean(tab.active || tab.selected);
+  } catch (_error) {
+    return false;
+  }
+}
+
+function viewTabKey(tab, tabs) {
+  const index = tabs.indexOf(tab);
+  const attrs = ["data-path", "href", "path", "value", "aria-label", "id"]
+    .map((name) => tab.getAttribute?.(name))
+    .filter(Boolean)
+    .join("|");
+  const text = String(tab.textContent || "").replace(/\s+/g, " ").trim();
+  return `${index}:${attrs || text}`;
+}
+
+function activeViewTab(tabGroup) {
+  const tabs = collectTabGroupViewTabs(tabGroup);
+  const tab = tabs.find(isActiveViewTab);
+  return tab ? { tab, key: viewTabKey(tab, tabs) } : null;
+}
+
 function setViewTabIconOffset(header, tabGroup, offset) {
   const tabs = new Set([
     ...collectViewTabs(header),
@@ -2371,6 +2415,24 @@ function writeScrollLeft(element, left) {
   }
 }
 
+function scrollLeftForTabCenter(scrollTarget, tab) {
+  const scrollRect = scrollTarget?.getBoundingClientRect?.();
+  const tabRect = tab?.getBoundingClientRect?.();
+  if (
+    !scrollRect ||
+    !tabRect ||
+    scrollRect.width <= 0 ||
+    tabRect.width <= 0
+  ) {
+    return null;
+  }
+
+  const currentLeft = readScrollLeft(scrollTarget);
+  const scrollCenter = scrollRect.left + scrollRect.width / 2;
+  const tabCenter = tabRect.left + tabRect.width / 2;
+  return clampNumber(currentLeft + tabCenter - scrollCenter, 0, maxScrollLeft(scrollTarget));
+}
+
 function removeTabScrollHandler(record) {
   if (!record) return;
   for (const [target, type, handler, capture] of record.listeners) {
@@ -2384,12 +2446,17 @@ function enableHorizontalTabScroll(tabGroup) {
 
   const current = state.tabScrollHandlers.get(tabGroup);
   if (current?.scrollTarget === scrollTarget) {
-    current.restore?.();
+    if (current.syncActive) {
+      current.syncActive();
+    } else {
+      current.restore?.();
+    }
     return;
   }
   removeTabScrollHandler(current);
 
   let desiredLeft = readScrollLeft(scrollTarget);
+  let activeKey = "";
   let userScrolled = false;
   let restoreTimer = 0;
   const gesture = {
@@ -2426,6 +2493,30 @@ function enableHorizontalTabScroll(tabGroup) {
     scheduleRestore(80);
     window.setTimeout(restore, 250);
     window.setTimeout(restore, 800);
+  };
+
+  const syncActive = () => {
+    const active = activeViewTab(tabGroup);
+    if (!active || !canScroll()) return;
+    const activeChanged = active.key !== activeKey;
+    activeKey = active.key;
+
+    if (!activeChanged && userScrolled) {
+      restore();
+      return;
+    }
+
+    const nextLeft = scrollLeftForTabCenter(scrollTarget, active.tab);
+    if (nextLeft === null) return;
+    rememberScrollLeft(nextLeft);
+  };
+
+  const scheduleActiveSync = () => {
+    syncActive();
+    window.requestAnimationFrame?.(syncActive);
+    window.setTimeout(syncActive, 80);
+    window.setTimeout(syncActive, 250);
+    window.setTimeout(syncActive, 800);
   };
 
   const beginGesture = (clientX, clientY) => {
@@ -2556,7 +2647,8 @@ function enableHorizontalTabScroll(tabGroup) {
   }
 
   tabGroup.setAttribute("data-ha-native-nav-scroll", "");
-  state.tabScrollHandlers.set(tabGroup, { scrollTarget, listeners, restore });
+  state.tabScrollHandlers.set(tabGroup, { scrollTarget, listeners, restore, syncActive: scheduleActiveSync });
+  scheduleActiveSync();
 }
 
 function syncHeaderMetrics(header) {
@@ -2754,7 +2846,12 @@ function observeRoot(root) {
   if (!target || state.observers.has(root)) return;
 
   const observer = new MutationObserver(() => scheduleApply());
-  observer.observe(target, { attributes: true, attributeFilter: ["class"], childList: true, subtree: true });
+  observer.observe(target, {
+    attributes: true,
+    attributeFilter: ["active", "aria-current", "aria-selected", "class", "selected"],
+    childList: true,
+    subtree: true
+  });
   state.observers.set(root, observer);
 }
 
