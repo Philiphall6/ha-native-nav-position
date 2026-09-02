@@ -1,10 +1,11 @@
-const VERSION = "1.0.4";
+const VERSION = "1.0.5";
 const TAG_NAME = "ha-native-nav-position";
 const STYLE_ID = "ha-native-nav-position-style";
 const NAV_ATTR = "data-ha-native-nav-position-active";
 const DOCK_ATTR = "data-ha-native-nav-position-dock";
 const SOURCE_ATTR = "data-ha-native-nav-position-source";
 const INLINE_ATTR = "data-ha-native-nav-position-inline";
+const FALLBACK_ICON_ATTR = "data-ha-native-nav-position-fallback-icon";
 const CONTROL_SIZE_VAR = "--ha-native-nav-control-size";
 const ICON_SIZE_VAR = "--ha-native-nav-icon-size";
 const TAB_Y_OFFSET_VAR = "--ha-native-nav-tab-y-offset";
@@ -105,6 +106,7 @@ const state = {
   docks: new WeakMap(),
   dockHeaders: new Set(),
   movedElements: new WeakMap(),
+  generatedIcons: new Set(),
   applyTimer: 0,
   started: false
 };
@@ -246,7 +248,7 @@ function buildTabCss(config) {
       border-inline: 0 !important;
       border-color: transparent !important;
       border-radius: ${controlRadius} !important;
-      overflow: hidden !important;
+      overflow: visible !important;
       position: relative !important;
       inset: auto !important;
       color: ${config.inactive_color} !important;
@@ -1200,7 +1202,7 @@ function buildHeaderCss(config) {
       min-height: ${config.height} !important;
       border-radius: ${config.radius} !important;
       box-sizing: border-box !important;
-      overflow: hidden !important;
+      overflow: visible !important;
       background: ${config.background} !important;
       border: ${config.border} !important;
       border-bottom: 0 !important;
@@ -1692,6 +1694,7 @@ function clearInlineStylesForHeader(header) {
 
 function clearAllInlineStyles() {
   restoreAllDocks();
+  removeGeneratedIconsFor(document);
   for (const element of Array.from(state.inlineElements)) {
     clearInlineStyles(element);
   }
@@ -1944,7 +1947,87 @@ function syncIconsInRoot(root, iconSize, color) {
   }
 }
 
-function syncTabControl(tab, controlSize, iconSize, radius) {
+function removeGeneratedIcon(icon) {
+  if (!icon) return;
+  clearInlineStyles(icon);
+  icon.remove();
+  state.generatedIcons.delete(icon);
+}
+
+function removeGeneratedIconsFor(root) {
+  for (const icon of Array.from(state.generatedIcons)) {
+    if (!icon.isConnected || root === document || root?.contains?.(icon)) {
+      removeGeneratedIcon(icon);
+    }
+  }
+}
+
+function normalizeLabel(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function tabLabel(tab) {
+  return (
+    tab.getAttribute?.("aria-label") ||
+    tab.getAttribute?.("title") ||
+    tab.getAttribute?.("label") ||
+    tab.textContent ||
+    ""
+  );
+}
+
+function fallbackIconName(tab, index) {
+  const label = normalizeLabel(tabLabel(tab));
+  if (index === 0 || /\b(home|accueil|maison)\b/.test(label)) return "mdi:home";
+  if (/\b(volet|volets|shutter|shutters)\b/.test(label)) return "mdi:window-shutter";
+  if (/\b(chauffage|climat|climate|temperature)\b/.test(label)) return "mdi:home-thermometer";
+  if (/\b(lumiere|eclairage|light|lights)\b/.test(label)) return "mdi:lightbulb";
+  if (/\b(camera|cameras|video)\b/.test(label)) return "mdi:cctv";
+  return "mdi:view-dashboard-outline";
+}
+
+function hasRealTabIcon(tab) {
+  return Array.from(collectComposedElements(tab, ICON_SELECTOR)).some(
+    (element) => !closestComposed(element, `[${FALLBACK_ICON_ATTR}]`)
+  );
+}
+
+function fallbackIconContainer(tab) {
+  return (
+    tab.shadowRoot?.querySelector(".mdc-tab__content span, .label, [part~='label'], .mdc-tab__content, [part~='content'], button, .mdc-tab") ||
+    tab
+  );
+}
+
+function ensureFallbackTabIcon(tab, index, iconSize, color) {
+  const generated = tab.shadowRoot?.querySelector(`[${FALLBACK_ICON_ATTR}]`) || tab.querySelector?.(`[${FALLBACK_ICON_ATTR}]`);
+  if (hasRealTabIcon(tab)) {
+    removeGeneratedIcon(generated);
+    return;
+  }
+
+  let icon = generated;
+  const name = fallbackIconName(tab, index);
+  if (!icon) {
+    icon = document.createElement("ha-icon");
+    icon.setAttribute(FALLBACK_ICON_ATTR, "");
+    icon.setAttribute("aria-hidden", "true");
+    icon.setAttribute("icon", name);
+    icon.dataset.icon = name.replace(/^mdi:/, "");
+    fallbackIconContainer(tab).appendChild(icon);
+    state.generatedIcons.add(icon);
+  }
+
+  icon.setAttribute("icon", name);
+  icon.dataset.icon = name.replace(/^mdi:/, "");
+  styleIconElement(icon, iconSize, color);
+}
+
+function syncTabControl(tab, controlSize, iconSize, radius, index = 0) {
   const active = isActiveTab(tab);
   const color = active ? state.config.active_color : state.config.inactive_color;
 
@@ -1998,6 +2081,7 @@ function syncTabControl(tab, controlSize, iconSize, radius) {
     styleLabelContainer(label, label.localName === "slot" ? iconSize : "100%", color);
   }
 
+  ensureFallbackTabIcon(tab, index, iconSize, color);
   syncIconsInRoot(tab, iconSize, color);
 }
 
@@ -2112,6 +2196,38 @@ function syncTabGroupInternals(group, controlSize) {
   });
 }
 
+function syncTabGroupScroll(group) {
+  const tabs = Array.from(group.querySelectorAll(TAB_SELECTOR));
+  if (!tabs.length) return;
+
+  const groupRect = group.getBoundingClientRect();
+  const totalWidth = tabs.reduce((sum, tab) => {
+    const rect = tab.getBoundingClientRect();
+    return sum + (Number.isFinite(rect.width) && rect.width > 0 ? rect.width : 48);
+  }, 0);
+
+  if (totalWidth > groupRect.width + 4) return;
+
+  const resetScroll = (element) => {
+    if (!element) return;
+    try {
+      element.scrollLeft = 0;
+    } catch (_error) {
+      // Some Home Assistant internals expose read-only scroll positions.
+    }
+  };
+
+  resetScroll(group);
+  if (group.shadowRoot) {
+    for (const element of collectComposedElements(
+      group.shadowRoot,
+      ".tab-group, .nav-container, .nav, .tabs, [part~='base'], [part~='nav'], [part~='tabs'], [class*='scroll'], [id*='scroll']"
+    )) {
+      resetScroll(element);
+    }
+  }
+}
+
 function elementCenterY(element) {
   if (!element?.getBoundingClientRect) return null;
   const rect = element.getBoundingClientRect();
@@ -2188,15 +2304,16 @@ function syncNavigationControls(header, controlSizeValue, iconSizeValue) {
       translate: "0 0"
     });
     syncTabGroupInternals(group, controlSize);
+    syncTabGroupScroll(group);
   }
 
   for (const button of header.querySelectorAll(SIDE_BUTTON_SELECTOR)) {
     syncSideButton(button, controlSize, iconSize, radius);
   }
 
-  for (const tab of header.querySelectorAll(TAB_SELECTOR)) {
-    syncTabControl(tab, controlSize, iconSize, radius);
-  }
+  Array.from(header.querySelectorAll(TAB_SELECTOR)).forEach((tab, index) => {
+    syncTabControl(tab, controlSize, iconSize, radius, index);
+  });
 
   syncDockContentAlignment(header);
 }
@@ -2227,6 +2344,7 @@ function syncHeaderMetrics(header) {
 
 function clearHeaderMetrics(header) {
   restoreDock(header);
+  removeGeneratedIconsFor(document);
   clearInlineStylesForHeader(header);
   header.style.removeProperty(CONTROL_SIZE_VAR);
   header.style.removeProperty(ICON_SIZE_VAR);
