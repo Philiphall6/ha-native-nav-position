@@ -1,4 +1,4 @@
-const VERSION = "1.0.9";
+const VERSION = "1.0.10";
 const TAG_NAME = "ha-native-nav-position";
 const STYLE_ID = "ha-native-nav-position-style";
 const NAV_ATTR = "data-ha-native-nav-position-active";
@@ -33,6 +33,7 @@ const BUTTON_SHADOW_HOSTS = new Set([
 const TAB_SELECTOR = "ha-tab-group-tab, paper-tab, mwc-tab, md-primary-tab, md-secondary-tab";
 const TAB_GROUP_SELECTOR = "ha-tab-group, ha-tabs, paper-tabs, mwc-tab-bar, [role='tablist']";
 const DOCK_TOOLBAR_CLASS = "ha-native-nav-position-toolbar";
+const ICON_HOST_SELECTOR = "ha-icon, ha-svg-icon, wa-icon, mwc-icon, md-icon, iron-icon";
 const TOOLBAR_CONTAINER_SELECTOR = `.toolbar, app-toolbar, ha-tabs, .${DOCK_TOOLBAR_CLASS}`;
 const DOCK_ALIGN_SELECTOR = "ha-menu-button, ha-icon-button, ha-button-menu, ha-tab-group, ha-tabs, paper-tabs, mwc-tab-bar, [role='tablist']";
 const SIDE_BUTTON_SELECTOR = "ha-menu-button, ha-icon-button, ha-button-menu, app-toolbar > ha-menu-button, app-toolbar > ha-icon-button, app-toolbar > ha-button-menu";
@@ -1904,6 +1905,26 @@ function styleIconElement(icon, iconSize, color) {
   });
 }
 
+function hideIconElement(icon) {
+  setInlineStyles(icon, {
+    position: "absolute",
+    left: "-9999px",
+    width: "0px",
+    height: "0px",
+    minWidth: "0px",
+    minHeight: "0px",
+    maxWidth: "0px",
+    maxHeight: "0px",
+    display: "none",
+    visibility: "hidden",
+    opacity: "0",
+    overflow: "hidden",
+    clipPath: "inset(50%)",
+    flex: "0 0 0px",
+    pointerEvents: "none"
+  });
+}
+
 function styleCenteredControl(element, controlSize, radius, color) {
   setInlineStyles(element, {
     width: controlSize,
@@ -1956,10 +1977,64 @@ function styleLabelContainer(element, size, color) {
   });
 }
 
-function syncIconsInRoot(root, iconSize, color) {
+function iconNameValue(element) {
+  return String(
+    element?.getAttribute?.("icon") ||
+      element?.icon ||
+      element?.dataset?.icon ||
+      element?.getAttribute?.("data-icon") ||
+      element?.getAttribute?.("aria-label") ||
+      ""
+  ).trim();
+}
+
+function hasMeaningfulIconName(element) {
+  const name = iconNameValue(element).toLowerCase();
+  return Boolean(name) && !["none", "null", "undefined", "unknown", "mdi", "mdi:"].includes(name);
+}
+
+function svgHasGraphic(element) {
+  if (!element?.querySelector) return false;
+  return Boolean(
+    element.querySelector(
+      "path[d]:not([d='']), use, circle, rect, polygon, polyline, line, g > path[d]:not([d=''])"
+    )
+  );
+}
+
+function isIndicatorIconElement(element) {
+  return Boolean(
+    closestComposed(
+      element,
+      ".mdc-tab-indicator, .mdc-tab-indicator__content, [class*='active-indicator'], [class*='selection-indicator'], [part~='active-indicator'], [part~='selection-indicator'], [part~='indicator']"
+    )
+  );
+}
+
+function isMeaningfulTabIconElement(element) {
+  if (!element) return false;
+  if (closestComposed(element, `[${FALLBACK_ICON_ATTR}]`)) return true;
+  if (isIndicatorIconElement(element)) return false;
+
+  const iconHost = closestComposed(element, ICON_HOST_SELECTOR);
+  if (iconHost && iconHost !== element) return isMeaningfulTabIconElement(iconHost);
+
+  if (element.matches?.(ICON_HOST_SELECTOR)) {
+    return hasMeaningfulIconName(element);
+  }
+
+  if (element.localName === "svg") return svgHasGraphic(element);
+  return hasMeaningfulIconName(element) || svgHasGraphic(element);
+}
+
+function syncIconsInRoot(root, iconSize, color, options = {}) {
   const icons = collectComposedElements(root, ICON_SELECTOR);
   collectAssignedSlotElements(root?.shadowRoot || root, icons);
   for (const icon of icons) {
+    if (options.tabIcons && !isMeaningfulTabIconElement(icon)) {
+      hideIconElement(icon);
+      continue;
+    }
     styleIconElement(icon, iconSize, color);
   }
 }
@@ -1976,6 +2051,15 @@ function removeGeneratedIconsFor(root) {
     if (!icon.isConnected || root === document || root?.contains?.(icon)) {
       removeGeneratedIcon(icon);
     }
+  }
+}
+
+function removeEmptyLightDomTabIcons(tab) {
+  for (const icon of Array.from(tab.querySelectorAll?.(ICON_HOST_SELECTOR) || [])) {
+    if (closestComposed(icon, `[${FALLBACK_ICON_ATTR}]`)) continue;
+    if (hasMeaningfulIconName(icon)) continue;
+    clearInlineStyles(icon);
+    icon.remove();
   }
 }
 
@@ -2078,7 +2162,7 @@ function isDashboardEditMode(header) {
 
 function hasRealTabIcon(tab) {
   return Array.from(collectComposedElements(tab, ICON_SELECTOR)).some(
-    (element) => !closestComposed(element, `[${FALLBACK_ICON_ATTR}]`)
+    (element) => !closestComposed(element, `[${FALLBACK_ICON_ATTR}]`) && isMeaningfulTabIconElement(element)
   );
 }
 
@@ -2101,6 +2185,8 @@ function ensureFallbackTabIcon(tab, index, iconSize, color) {
     return;
   }
 
+  removeEmptyLightDomTabIcons(tab);
+
   let icon = generated;
   const name = fallbackIconName(tab, index);
   if (!icon) {
@@ -2108,6 +2194,7 @@ function ensureFallbackTabIcon(tab, index, iconSize, color) {
     icon.setAttribute(FALLBACK_ICON_ATTR, "");
     icon.setAttribute("aria-hidden", "true");
     icon.setAttribute("icon", name);
+    icon.icon = name;
     icon.dataset.icon = name.replace(/^mdi:/, "");
     const slotName = fallbackIconSlot(tab);
     if (slotName) icon.setAttribute("slot", slotName);
@@ -2116,6 +2203,7 @@ function ensureFallbackTabIcon(tab, index, iconSize, color) {
   }
 
   icon.setAttribute("icon", name);
+  icon.icon = name;
   icon.dataset.icon = name.replace(/^mdi:/, "");
   styleIconElement(icon, iconSize, color);
 }
@@ -2176,7 +2264,7 @@ function syncTabControl(tab, controlSize, iconSize, radius, index = 0, margin = 
   }
 
   ensureFallbackTabIcon(tab, index, iconSize, color);
-  syncIconsInRoot(tab, iconSize, color);
+  syncIconsInRoot(tab, iconSize, color, { tabIcons: true });
 }
 
 function syncSideButton(button, controlSize, iconSize, radius) {
@@ -2324,6 +2412,8 @@ function syncTabGroupScroll(group) {
   window.requestAnimationFrame(resetAll);
   window.setTimeout(resetAll, 80);
   window.setTimeout(resetAll, 250);
+  window.setTimeout(resetAll, 600);
+  window.setTimeout(resetAll, 1200);
 }
 
 function elementCenterY(element) {
