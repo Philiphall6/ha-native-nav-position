@@ -100,6 +100,13 @@ const state = {
   observers: new WeakMap(),
   tabScrollHandlers: new WeakMap(),
   actionMenuRecords: new WeakMap(),
+  viewPointerGesture: {
+    active: false,
+    pointerId: null,
+    startX: 0,
+    startY: 0,
+    tab: null
+  },
   applyTimer: 0,
   started: false
 };
@@ -1492,12 +1499,14 @@ function buildHeaderCss(config) {
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
+      pointer-events: auto !important;
     `
     : `
       left: var(${SIDEBAR_INSET_VAR}, 0px) !important;
       right: 0 !important;
       width: auto !important;
       min-height: ${config.height} !important;
+      pointer-events: auto !important;
     `;
 
   const toolbarCss = config.dock
@@ -1517,9 +1526,11 @@ function buildHeaderCss(config) {
       justify-content: center !important;
       box-sizing: border-box !important;
       overflow: visible !important;
+      pointer-events: auto !important;
     `
     : `
       min-height: ${config.height} !important;
+      pointer-events: auto !important;
     `;
 
   const sideButtonCss = `
@@ -1544,7 +1555,7 @@ function buildHeaderCss(config) {
       box-shadow: none !important;
       outline: 0 !important;
       display: grid !important;
-      grid-template-columns: ${controlSize} minmax(0, 1fr) ${controlSize} !important;
+      grid-template-columns: ${controlSize} minmax(0, 1fr) max-content !important;
       grid-template-rows: ${config.height} !important;
       align-items: center !important;
       justify-content: stretch !important;
@@ -1553,6 +1564,7 @@ function buildHeaderCss(config) {
       gap: 0 !important;
       position: relative !important;
       overflow: visible !important;
+      pointer-events: auto !important;
     }
 
     ${headerSelector} app-toolbar > ha-menu-button,
@@ -1563,6 +1575,8 @@ function buildHeaderCss(config) {
       grid-column: 1 !important;
       justify-self: center !important;
       flex: 0 0 ${controlSize} !important;
+      z-index: 4 !important;
+      pointer-events: auto !important;
     }
 
     ${headerSelector} app-toolbar > ha-tabs,
@@ -1593,16 +1607,18 @@ function buildHeaderCss(config) {
       -webkit-overflow-scrolling: touch !important;
       position: relative !important;
       top: calc(var(${TAB_Y_OFFSET_VAR}, ${config.tab_y_offset}) + var(${CONTENT_Y_OFFSET_VAR}, 0px)) !important;
+      z-index: 4 !important;
+      pointer-events: auto !important;
     }
 
     ${headerSelector} .action-items {
       order: 2 !important;
       grid-column: 3 !important;
-      justify-self: center !important;
-      flex: 0 0 ${controlSize} !important;
-      width: ${controlSize} !important;
+      justify-self: end !important;
+      flex: 0 0 auto !important;
+      width: max-content !important;
       min-width: ${controlSize} !important;
-      max-width: ${controlSize} !important;
+      max-width: none !important;
       height: ${controlSize} !important;
       min-height: ${controlSize} !important;
       max-height: ${controlSize} !important;
@@ -1610,11 +1626,12 @@ function buildHeaderCss(config) {
       padding: 0 !important;
       display: flex !important;
       align-items: center !important;
-      justify-content: center !important;
+      justify-content: flex-end !important;
       overflow: visible !important;
       position: relative !important;
       top: var(${CONTENT_Y_OFFSET_VAR}, 0px) !important;
-      z-index: 2 !important;
+      z-index: 5 !important;
+      pointer-events: auto !important;
     }
 
     ${headerSelector} .action-items > ha-icon-button,
@@ -1635,6 +1652,7 @@ function buildHeaderCss(config) {
       position: relative !important;
       top: 0 !important;
       overflow: visible !important;
+      pointer-events: auto !important;
     }
 
     ${headerSelector} app-toolbar > ha-icon-button:not([slot="navigationIcon"]),
@@ -1642,11 +1660,11 @@ function buildHeaderCss(config) {
     ${headerSelector} [${NAV_PART_ATTR}="actions"] {
       order: 2 !important;
       grid-column: 3 !important;
-      justify-self: center !important;
-      flex: 0 0 ${controlSize} !important;
-      width: ${controlSize} !important;
+      justify-self: end !important;
+      flex: 0 0 auto !important;
+      width: max-content !important;
       min-width: ${controlSize} !important;
-      max-width: ${controlSize} !important;
+      max-width: none !important;
       height: ${controlSize} !important;
       min-height: ${controlSize} !important;
       max-height: ${controlSize} !important;
@@ -1654,30 +1672,34 @@ function buildHeaderCss(config) {
       padding: 0 !important;
       display: flex !important;
       align-items: center !important;
-      justify-content: center !important;
+      justify-content: flex-end !important;
       position: relative !important;
       top: var(${CONTENT_Y_OFFSET_VAR}, 0px) !important;
       overflow: visible !important;
+      z-index: 5 !important;
+      pointer-events: auto !important;
     }
 
     ${headerSelector} app-toolbar > ha-button-menu,
     ${headerSelector} .toolbar > ha-button-menu {
       order: 2 !important;
       grid-column: 3 !important;
-      justify-self: center !important;
-      flex: 0 0 ${controlSize} !important;
-      width: ${controlSize} !important;
+      justify-self: end !important;
+      flex: 0 0 auto !important;
+      width: max-content !important;
       min-width: ${controlSize} !important;
-      max-width: ${controlSize} !important;
+      max-width: none !important;
       height: ${controlSize} !important;
       min-height: ${controlSize} !important;
       max-height: ${controlSize} !important;
       display: flex !important;
       align-items: center !important;
-      justify-content: center !important;
+      justify-content: flex-end !important;
       position: relative !important;
       top: var(${CONTENT_Y_OFFSET_VAR}, 0px) !important;
       overflow: visible !important;
+      z-index: 5 !important;
+      pointer-events: auto !important;
     }
 
     ${headerSelector}::before,
@@ -1725,6 +1747,7 @@ function buildHeaderCss(config) {
       position: relative !important;
       top: 0 !important;
       overflow: hidden !important;
+      pointer-events: auto !important;
     }
 
     ${headerSelector} [${NAV_PART_ATTR}="menu"] {
@@ -2082,6 +2105,189 @@ function activeViewTab(tabGroup) {
   const tabs = collectTabGroupViewTabs(tabGroup);
   const tab = tabs.find(isActiveViewTab);
   return tab ? { tab, key: viewTabKey(tab, tabs) } : null;
+}
+
+function eventViewTab(event, tabGroup) {
+  const tabs = collectTabGroupViewTabs(tabGroup);
+  if (!tabs.length) return null;
+  const path = typeof event.composedPath === "function" ? event.composedPath() : [];
+  const pathTab = path.find((node) => tabs.includes(node));
+  if (pathTab) return pathTab;
+
+  const targetTab = tabs.find((tab) => tab.contains?.(event.target));
+  if (targetTab) return targetTab;
+
+  const clientX = Number(event.clientX);
+  const clientY = Number(event.clientY);
+  if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return null;
+
+  return tabs.find((tab) => {
+    const rect = tab.getBoundingClientRect?.();
+    if (!rect || rect.width <= 0 || rect.height <= 0) return false;
+    return (
+      clientX >= rect.left - 8 &&
+      clientX <= rect.right + 8 &&
+      clientY >= rect.top - 12 &&
+      clientY <= rect.bottom + 12
+    );
+  }) || null;
+}
+
+function rectContainsPoint(rect, clientX, clientY, padX = 0, padY = 0) {
+  if (!rect || rect.width <= 0 || rect.height <= 0) return false;
+  return (
+    clientX >= rect.left - padX &&
+    clientX <= rect.right + padX &&
+    clientY >= rect.top - padY &&
+    clientY <= rect.bottom + padY
+  );
+}
+
+function markedHeaders() {
+  return collectDeepElements(document, `.header[${NAV_ATTR}]`);
+}
+
+function viewTabAtPoint(clientX, clientY) {
+  if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return null;
+
+  for (const header of markedHeaders()) {
+    const tabGroup = findTabGroup(header);
+    if (!tabGroup) continue;
+
+    const groupRect = tabGroup.getBoundingClientRect?.();
+    if (!rectContainsPoint(groupRect, clientX, clientY, 4, 14)) continue;
+
+    for (const tab of collectTabGroupViewTabs(tabGroup)) {
+      if (rectContainsPoint(tab.getBoundingClientRect?.(), clientX, clientY, 10, 14)) {
+        return tab;
+      }
+    }
+  }
+
+  return null;
+}
+
+function viewTabRoute(tab) {
+  if (!tab) return "";
+  const route =
+    tab.getAttribute?.("data-path") ||
+    tab.getAttribute?.("path") ||
+    tab.getAttribute?.("href") ||
+    tab.getAttribute?.("value") ||
+    "";
+  return String(route).trim();
+}
+
+function dashboardBasePath() {
+  const parts = String(window.location?.pathname || "").split("/").filter(Boolean);
+  return parts.length ? `/${parts[0]}` : "/lovelace";
+}
+
+function dashboardViewUrl(route) {
+  const text = String(route || "").trim();
+  if (!text) return "";
+  if (/^https?:\/\//i.test(text)) return text;
+  if (text.startsWith("/")) return text;
+
+  const encoded = text
+    .split("/")
+    .filter(Boolean)
+    .map((part) => encodeURIComponent(decodeURIComponent(part)))
+    .join("/");
+  return `${dashboardBasePath()}/${encoded}`;
+}
+
+function navigateDashboardView(route) {
+  const nextUrl = dashboardViewUrl(route);
+  if (!nextUrl || nextUrl === window.location?.pathname) return false;
+
+  if (window.history?.pushState) {
+    window.history.pushState(null, "", nextUrl);
+    window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
+    return true;
+  }
+
+  window.location.assign(nextUrl);
+  return true;
+}
+
+function scheduleViewClickFallback(event, tabGroup) {
+  const tab = eventViewTab(event, tabGroup);
+  if (!tab || isActiveViewTab(tab)) return;
+
+  const route = viewTabRoute(tab);
+  if (!route) return;
+
+  const before = window.location?.pathname || "";
+  window.setTimeout(() => {
+    if ((window.location?.pathname || "") !== before) return;
+    if (isActiveViewTab(tab)) return;
+    navigateDashboardView(route);
+  }, 80);
+}
+
+function stopViewClickThrough(event) {
+  event.preventDefault?.();
+  event.stopPropagation?.();
+  event.stopImmediatePropagation?.();
+}
+
+function navigateViewTab(tab) {
+  if (!tab) return false;
+  const route = viewTabRoute(tab);
+  if (!route) return false;
+  if (isActiveViewTab(tab)) return true;
+  return navigateDashboardView(route);
+}
+
+function resetGlobalViewGesture() {
+  state.viewPointerGesture.active = false;
+  state.viewPointerGesture.pointerId = null;
+  state.viewPointerGesture.tab = null;
+}
+
+function onGlobalViewPointerDown(event) {
+  if (!state.config.enabled || !allowsCurrentRoute()) return;
+  if (event.isPrimary === false) return;
+  if (typeof event.button === "number" && event.button !== 0) return;
+
+  const tab = viewTabAtPoint(Number(event.clientX), Number(event.clientY));
+  if (!tab) {
+    resetGlobalViewGesture();
+    return;
+  }
+
+  state.viewPointerGesture.active = true;
+  state.viewPointerGesture.pointerId = event.pointerId;
+  state.viewPointerGesture.startX = Number(event.clientX);
+  state.viewPointerGesture.startY = Number(event.clientY);
+  state.viewPointerGesture.tab = tab;
+}
+
+function onGlobalViewPointerUp(event) {
+  const gesture = state.viewPointerGesture;
+  if (!gesture.active || gesture.pointerId !== event.pointerId) return;
+
+  const clientX = Number(event.clientX);
+  const clientY = Number(event.clientY);
+  const moved = Math.hypot(clientX - gesture.startX, clientY - gesture.startY);
+  const tab = moved <= 10 ? viewTabAtPoint(clientX, clientY) || gesture.tab : null;
+  resetGlobalViewGesture();
+  if (!tab) return;
+
+  stopViewClickThrough(event);
+  navigateViewTab(tab);
+}
+
+function onGlobalViewClick(event) {
+  if (!state.config.enabled || !allowsCurrentRoute()) return;
+  if (typeof event.button === "number" && event.button !== 0) return;
+
+  const tab = viewTabAtPoint(Number(event.clientX), Number(event.clientY));
+  if (!tab) return;
+
+  stopViewClickThrough(event);
+  navigateViewTab(tab);
 }
 
 function setViewTabIconOffset(header, tabGroup, offset) {
@@ -2663,20 +2869,26 @@ function enableHorizontalTabScroll(tabGroup) {
 
   const onPointerEnd = (event) => {
     if (gesture.pointerId !== event.pointerId) return;
+    const shouldFallback = !gesture.horizontal && !gesture.suppressClick;
     try {
       tabGroup.releasePointerCapture?.(event.pointerId);
     } catch (_error) {
       // Pointer capture may not have been established.
     }
     finishGesture(event);
+    if (shouldFallback) scheduleViewClickFallback(event, tabGroup);
   };
 
   const onClick = (event) => {
-    if (!gesture.suppressClick) return;
-    event.preventDefault();
-    event.stopPropagation();
-    event.stopImmediatePropagation?.();
-    gesture.suppressClick = false;
+    if (gesture.suppressClick) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation?.();
+      gesture.suppressClick = false;
+      return;
+    }
+
+    scheduleViewClickFallback(event, tabGroup);
   };
 
   const onWheel = (event) => {
@@ -2976,6 +3188,10 @@ function start(config) {
   window.addEventListener("location-changed", scheduleApply);
   window.addEventListener("popstate", scheduleApply);
   window.addEventListener("resize", scheduleApply);
+  window.addEventListener("pointerdown", onGlobalViewPointerDown, true);
+  window.addEventListener("pointerup", onGlobalViewPointerUp, true);
+  window.addEventListener("pointercancel", resetGlobalViewGesture, true);
+  window.addEventListener("click", onGlobalViewClick, true);
   window.setInterval(scheduleApply, 2500);
 }
 
