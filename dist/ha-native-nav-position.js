@@ -10,6 +10,7 @@ const ICON_Y_OFFSET_VAR = "--ha-native-nav-icon-y-offset";
 const VIEW_ICON_Y_OFFSET_VAR = "--ha-native-nav-view-icon-y-offset";
 const CONTENT_Y_OFFSET_VAR = "--ha-native-nav-content-y-offset";
 const MENU_Y_OFFSET_VAR = "--ha-native-nav-menu-y-offset";
+const SIDEBAR_INSET_VAR = "--ha-native-nav-sidebar-inset";
 const IOS_VIEW_Y_OFFSET = "0px";
 const TAB_SHADOW_HOSTS = new Set([
   "ha-tab-group-tab",
@@ -1039,6 +1040,8 @@ function buildTabGroupShadowCss(config) {
       --ha-tab-padding-end: 0px !important;
       min-width: 0 !important;
       width: 100% !important;
+      max-width: 100% !important;
+      flex: 1 1 auto !important;
       overflow-x: auto !important;
       overflow-y: hidden !important;
       touch-action: pan-x !important;
@@ -1094,7 +1097,9 @@ function buildTabGroupShadowCss(config) {
       padding-block: 0 !important;
       margin: 0 !important;
       min-width: 0 !important;
+      width: 100% !important;
       max-width: 100% !important;
+      flex: 1 1 auto !important;
       overflow-x: auto !important;
       overflow-y: hidden !important;
       touch-action: pan-x !important;
@@ -1462,11 +1467,15 @@ function buildHeaderCss(config) {
   const tabYOffset = `var(${TAB_Y_OFFSET_VAR}, ${config.tab_y_offset})`;
   const controlRadius = `calc(${controlSize} / 2)`;
   const actionMenuZIndex = String((Number.parseInt(config.z_index, 10) || 1000) + 20);
+  const sideGapLeft = `max(${config.side_gap}, env(safe-area-inset-left))`;
+  const sideGapRight = `max(${config.side_gap}, env(safe-area-inset-right))`;
+  const dockLeft = `calc(var(${SIDEBAR_INSET_VAR}, 0px) + ${sideGapLeft})`;
   const dockCss = config.dock
     ? `
-      left: max(${config.side_gap}, env(safe-area-inset-left)) !important;
-      right: max(${config.side_gap}, env(safe-area-inset-right)) !important;
+      left: ${dockLeft} !important;
+      right: ${sideGapRight} !important;
       width: auto !important;
+      max-width: calc(100vw - var(${SIDEBAR_INSET_VAR}, 0px) - ${sideGapLeft} - ${sideGapRight}) !important;
       height: ${config.height} !important;
       min-height: ${config.height} !important;
       max-height: ${config.height} !important;
@@ -1485,9 +1494,9 @@ function buildHeaderCss(config) {
       justify-content: center !important;
     `
     : `
-      left: 0 !important;
+      left: var(${SIDEBAR_INSET_VAR}, 0px) !important;
       right: 0 !important;
-      width: 100% !important;
+      width: auto !important;
       min-height: ${config.height} !important;
     `;
 
@@ -1888,6 +1897,64 @@ function sizeFromRect(rect, fallback) {
 function parseCssPixelValue(value, fallback = 0) {
   const number = Number.parseFloat(String(value || "").trim());
   return Number.isFinite(number) ? number : fallback;
+}
+
+function matchesMobileLayout(config = state.config) {
+  try {
+    return Boolean(window.matchMedia?.(`(max-width: ${config.mobile_max_width})`)?.matches);
+  } catch (_error) {
+    const width = window.innerWidth || document.documentElement?.clientWidth || 0;
+    return width > 0 && width <= parseCssPixelValue(config.mobile_max_width, 768);
+  }
+}
+
+function visibleSidebarInset(header) {
+  const viewportWidth = window.innerWidth || document.documentElement?.clientWidth || 0;
+  const viewportHeight = window.innerHeight || document.documentElement?.clientHeight || 0;
+  if (!viewportWidth || !viewportHeight || state.config.mobile_only || state.config.only === "mobile") return 0;
+  if (matchesMobileLayout(state.config)) return 0;
+
+  const selector = [
+    "ha-sidebar",
+    "ha-drawer",
+    "app-drawer",
+    "mwc-drawer",
+    ".mdc-drawer",
+    ".drawer",
+    ".drawer-content",
+    ".sidebar",
+    "#drawer"
+  ].join(", ");
+  let inset = 0;
+
+  for (const element of collectDeepElements(document, selector)) {
+    if (
+      !element ||
+      element === header ||
+      header?.contains?.(element) ||
+      closestComposed(element, `.header[${NAV_ATTR}]`)
+    ) {
+      continue;
+    }
+
+    const rect = element.getBoundingClientRect?.();
+    if (!rect || rect.width < 48 || rect.height < viewportHeight * 0.6) continue;
+    if (rect.top > Math.max(80, viewportHeight * 0.15) || rect.bottom < viewportHeight * 0.8) continue;
+    if (rect.left > 4 || rect.right <= 48) continue;
+
+    const visibleRight = Math.min(rect.right, rect.width);
+    if (visibleRight > Math.min(420, viewportWidth * 0.7)) continue;
+
+    const style = window.getComputedStyle?.(element);
+    if (style) {
+      if (style.display === "none" || style.visibility === "hidden") continue;
+      if (parseCssPixelValue(style.opacity, 1) <= 0.01) continue;
+    }
+
+    inset = Math.max(inset, visibleRight);
+  }
+
+  return clampNumber(Math.round(inset), 0, 420);
 }
 
 function rectCenterY(element) {
@@ -2657,6 +2724,7 @@ function syncHeaderMetrics(header) {
 
   const tabGroup = findTabGroup(header);
   enableHorizontalTabScroll(tabGroup);
+  header.style.setProperty(SIDEBAR_INSET_VAR, `${visibleSidebarInset(header)}px`);
 
   const button = header.querySelector(
     "ha-menu-button, app-toolbar > ha-menu-button, ha-icon-button[slot='navigationIcon'], app-toolbar > ha-icon-button"
@@ -2729,6 +2797,7 @@ function clearHeaderMetrics(header) {
   header.style.removeProperty(VIEW_ICON_Y_OFFSET_VAR);
   header.style.removeProperty(CONTENT_Y_OFFSET_VAR);
   header.style.removeProperty(MENU_Y_OFFSET_VAR);
+  header.style.removeProperty(SIDEBAR_INSET_VAR);
   tabGroup?.style.removeProperty(TAB_Y_OFFSET_VAR);
   tabGroup?.style.removeProperty(ICON_Y_OFFSET_VAR);
   tabGroup?.style.removeProperty(VIEW_ICON_Y_OFFSET_VAR);
