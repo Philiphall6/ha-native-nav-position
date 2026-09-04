@@ -1,4 +1,4 @@
-const VERSION = "1.3.1";
+const VERSION = "1.3.2";
 const TAG_NAME = "ha-native-nav-position";
 const STYLE_ID = "ha-native-nav-position-style-current";
 const NAV_ATTR = "data-ha-native-nav-position-active";
@@ -86,8 +86,8 @@ const DEFAULT_CONFIG = {
   ios_bottom_offset: "8px",
   bottom_padding: "128px",
   top_padding: "88px",
-  background: "var(--header_background, var(--header-background, var(--app-header-background-color, rgba(35, 48, 64, 0.54))))",
-  header_background: "var(--header_background, var(--header-background, var(--app-header-background-color, rgba(35, 48, 64, 0.54))))",
+  background: "var(--ha-theme-tweaker-header-background, var(--app-header-background-color, rgba(35, 48, 64, 0.54)))",
+  header_background: "var(--ha-theme-tweaker-header-background, var(--app-header-background-color, rgba(35, 48, 64, 0.54)))",
   active_background: "transparent",
   active_color: "var(--accent-color, var(--primary-color))",
   inactive_color: "rgba(255, 255, 255, 0.78)",
