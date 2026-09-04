@@ -1,4 +1,4 @@
-const VERSION = "1.0.0";
+const VERSION = "1.3.1";
 const TAG_NAME = "ha-native-nav-position";
 const STYLE_ID = "ha-native-nav-position-style-current";
 const NAV_ATTR = "data-ha-native-nav-position-active";
@@ -86,8 +86,8 @@ const DEFAULT_CONFIG = {
   ios_bottom_offset: "8px",
   bottom_padding: "128px",
   top_padding: "88px",
-  background: "rgba(35, 48, 64, 0.54)",
-  header_background: "rgba(35, 48, 64, 0.54)",
+  background: "var(--header_background, var(--header-background, var(--app-header-background-color, rgba(35, 48, 64, 0.54))))",
+  header_background: "var(--header_background, var(--header-background, var(--app-header-background-color, rgba(35, 48, 64, 0.54))))",
   active_background: "transparent",
   active_color: "var(--accent-color, var(--primary-color))",
   inactive_color: "rgba(255, 255, 255, 0.78)",
@@ -243,9 +243,11 @@ function normalizeConfig(input = {}) {
   );
   normalized.bottom_padding = toCssSize(merged.bottom_padding ?? merged.bottomPadding, DEFAULT_CONFIG.bottom_padding);
   normalized.top_padding = toCssSize(merged.top_padding ?? merged.topPadding, DEFAULT_CONFIG.top_padding);
-  normalized.background = safeText(merged.background, DEFAULT_CONFIG.background);
+  const rawBackground = input.background;
+  const rawHeaderBackground = input.header_background ?? input.headerBackground;
+  normalized.background = safeText(rawBackground ?? merged.background, DEFAULT_CONFIG.background);
   normalized.header_background = safeText(
-    merged.header_background ?? merged.headerBackground ?? merged.background,
+    rawHeaderBackground ?? rawBackground ?? DEFAULT_CONFIG.header_background,
     DEFAULT_CONFIG.header_background
   );
   normalized.active_background = safeText(merged.active_background ?? merged.activeBackground, DEFAULT_CONFIG.active_background);
@@ -1495,6 +1497,8 @@ function buildHeaderCss(config) {
       box-sizing: border-box !important;
       overflow: visible !important;
       background: ${config.header_background} !important;
+      background-color: ${config.header_background} !important;
+      --app-header-background-color: ${config.header_background} !important;
       border: ${config.border} !important;
       border-bottom: 0 !important;
       outline: 0 !important;

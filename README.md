@@ -118,8 +118,8 @@ type: module
 | `ios_icon_y_offset` | `0px` | Optional iPhone/iPad vertical offset for side action icon glyphs. The dock itself stays fixed. |
 | `ios_view_icon_y_offset` | `0px` | Optional iPhone/iPad vertical offset for dashboard view icon glyphs. |
 | `ios_bottom_offset` | `8px` | iPhone/iPad bottom distance. Lower values move the dock closer to the bottom edge. |
-| `header_background` | `rgba(35, 48, 64, 0.54)` | Dock/header background color. Overrides `background` when set. |
-| `background` | `rgba(35, 48, 64, 0.54)` | Legacy alias for `header_background`. |
+| `header_background` | Home Assistant header background | Dock/header background color. Overrides `background` when set. |
+| `background` | Home Assistant header background | Legacy alias for `header_background`. |
 | `active_color` | `var(--accent-color, var(--primary-color))` | Active view icon color, inherited from the current Home Assistant theme. |
 | `inactive_color` | `rgba(255, 255, 255, 0.78)` | Inactive view icon color. |
 
