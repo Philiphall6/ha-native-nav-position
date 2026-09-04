@@ -87,6 +87,7 @@ const DEFAULT_CONFIG = {
   bottom_padding: "128px",
   top_padding: "88px",
   background: "rgba(35, 48, 64, 0.54)",
+  header_background: "rgba(35, 48, 64, 0.54)",
   active_background: "transparent",
   active_color: "var(--accent-color, var(--primary-color))",
   inactive_color: "rgba(255, 255, 255, 0.78)",
@@ -243,6 +244,10 @@ function normalizeConfig(input = {}) {
   normalized.bottom_padding = toCssSize(merged.bottom_padding ?? merged.bottomPadding, DEFAULT_CONFIG.bottom_padding);
   normalized.top_padding = toCssSize(merged.top_padding ?? merged.topPadding, DEFAULT_CONFIG.top_padding);
   normalized.background = safeText(merged.background, DEFAULT_CONFIG.background);
+  normalized.header_background = safeText(
+    merged.header_background ?? merged.headerBackground ?? merged.background,
+    DEFAULT_CONFIG.header_background
+  );
   normalized.active_background = safeText(merged.active_background ?? merged.activeBackground, DEFAULT_CONFIG.active_background);
   normalized.active_color = safeText(merged.active_color ?? merged.activeColor, DEFAULT_CONFIG.active_color);
   normalized.inactive_color = safeText(merged.inactive_color ?? merged.inactiveColor, DEFAULT_CONFIG.inactive_color);
@@ -1489,7 +1494,7 @@ function buildHeaderCss(config) {
       border-radius: ${config.radius} !important;
       box-sizing: border-box !important;
       overflow: visible !important;
-      background: ${config.background} !important;
+      background: ${config.header_background} !important;
       border: ${config.border} !important;
       border-bottom: 0 !important;
       outline: 0 !important;
