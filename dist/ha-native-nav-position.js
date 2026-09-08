@@ -96,10 +96,12 @@ const DEFAULT_CONFIG = {
   z_index: 1000
 };
 
-const state = {
+const state = window.__haNativeNavPositionState ||= {
   config: { ...DEFAULT_CONFIG },
-  observers: new WeakMap(),
-  tabScrollHandlers: new WeakMap(),
+  observers: new Map(),
+  cssCache: null,
+  retryTimers: new Set(),
+  tabScrollHandlers: new Map(),
   actionMenuRecords: new WeakMap(),
   viewPointerGesture: {
     active: false,
@@ -1959,7 +1961,7 @@ function visibleSidebarInset(header) {
   ].join(", ");
   let inset = 0;
 
-  for (const element of collectDeepElements(document, selector)) {
+  for (const element of shellElements(selector)) {
     if (
       !element ||
       element === header ||
@@ -2522,7 +2524,7 @@ function isDashboardMenuButton(button) {
 }
 
 function markNavPart(element, part) {
-  if (element?.setAttribute) element.setAttribute(NAV_PART_ATTR, part);
+  if (element?.getAttribute(NAV_PART_ATTR) !== part) element?.setAttribute(NAV_PART_ATTR, part);
 }
 
 function clearNavPartMarkers(header) {
@@ -2541,7 +2543,9 @@ function normalizeDockParts(header) {
   ).find(isDashboardMenuButton);
   const actionPart = actionItems || actionButton;
 
-  clearNavPartMarkers(header);
+  for (const element of header.querySelectorAll(`[${NAV_PART_ATTR}]`)) {
+    if (![menuButton, tabGroup, actionPart].includes(element)) element.removeAttribute(NAV_PART_ATTR);
+  }
 
   markNavPart(menuButton, "menu");
   markNavPart(tabGroup, "views");
@@ -2553,7 +2557,7 @@ function normalizeDockParts(header) {
     toolbar.insertBefore(menuButton, toolbar.firstElementChild);
   }
 
-  if (tabGroup.parentElement === toolbar && actionPart?.parentElement === toolbar) {
+  if (tabGroup.parentElement === toolbar && actionPart?.parentElement === toolbar && tabGroup.nextElementSibling !== actionPart) {
     toolbar.insertBefore(tabGroup, actionPart);
   }
 }
@@ -2605,7 +2609,7 @@ function rememberActionMenu(menu) {
 }
 
 function setElementProperty(element, property, value) {
-  if (!(property in element)) return;
+  if (!(property in element) || element[property] === value) return;
   try {
     element[property] = value;
   } catch (_error) {
@@ -2717,6 +2721,7 @@ function scrollLeftForTabCenter(scrollTarget, tab) {
 
 function removeTabScrollHandler(record) {
   if (!record) return;
+  record.cancel?.();
   for (const [target, type, handler, capture] of record.listeners) {
     target.removeEventListener(type, handler, capture);
   }
@@ -2737,10 +2742,26 @@ function enableHorizontalTabScroll(tabGroup) {
   }
   removeTabScrollHandler(current);
 
+  const timers = new Set();
+  const frames = new Set();
+  const defer = (callback, delay) => {
+    const id = window.setTimeout(() => { timers.delete(id); if (tabGroup.isConnected) callback(); }, delay);
+    timers.add(id); return id;
+  };
+  const frame = (callback) => {
+    const id = window.requestAnimationFrame(() => { frames.delete(id); if (tabGroup.isConnected) callback(); });
+    frames.add(id); return id;
+  };
+  const cancel = () => {
+    for (const id of timers) clearTimeout(id);
+    for (const id of frames) cancelAnimationFrame(id);
+    timers.clear(); frames.clear(); syncFrame = 0;
+  };
   let desiredLeft = readScrollLeft(scrollTarget);
   let activeKey = "";
   let userScrolled = false;
-  let restoreTimer = 0;
+  const restoreTimers = new Map();
+  let restoreFrame = 0;
   const gesture = {
     active: false,
     horizontal: false,
@@ -2754,7 +2775,6 @@ function enableHorizontalTabScroll(tabGroup) {
 
   const canScroll = () => maxScrollLeft(scrollTarget) > 1;
   const restore = () => {
-    restoreTimer = 0;
     if (!userScrolled || !canScroll()) return;
     desiredLeft = clampNumber(desiredLeft, 0, maxScrollLeft(scrollTarget));
     if (Math.abs(readScrollLeft(scrollTarget) - desiredLeft) > 1) {
@@ -2763,18 +2783,18 @@ function enableHorizontalTabScroll(tabGroup) {
   };
 
   const scheduleRestore = (delay = 80) => {
-    if (restoreTimer) return;
-    restoreTimer = window.setTimeout(restore, delay);
+    if (restoreTimers.has(delay)) return;
+    restoreTimers.set(delay, defer(() => { restoreTimers.delete(delay); restore(); }, delay));
   };
 
   const rememberScrollLeft = (left) => {
     desiredLeft = clampNumber(left, 0, maxScrollLeft(scrollTarget));
     userScrolled = true;
     writeScrollLeft(scrollTarget, desiredLeft);
-    window.requestAnimationFrame(restore);
+    if (!restoreFrame) restoreFrame = frame(() => { restoreFrame = 0; restore(); });
     scheduleRestore(80);
-    window.setTimeout(restore, 250);
-    window.setTimeout(restore, 800);
+    scheduleRestore(250);
+    scheduleRestore(800);
   };
 
   const syncActive = () => {
@@ -2793,12 +2813,10 @@ function enableHorizontalTabScroll(tabGroup) {
     rememberScrollLeft(nextLeft);
   };
 
+  let syncFrame = 0;
   const scheduleActiveSync = () => {
-    syncActive();
-    window.requestAnimationFrame?.(syncActive);
-    window.setTimeout(syncActive, 80);
-    window.setTimeout(syncActive, 250);
-    window.setTimeout(syncActive, 800);
+    if (syncFrame) return;
+    syncFrame = frame(() => { syncFrame = 0; syncActive(); });
   };
 
   const beginGesture = (clientX, clientY) => {
@@ -2834,7 +2852,7 @@ function enableHorizontalTabScroll(tabGroup) {
     if (gesture.horizontal) {
       event?.stopPropagation?.();
       gesture.suppressClick = true;
-      window.setTimeout(() => {
+      defer(() => {
         gesture.suppressClick = false;
       }, 160);
     }
@@ -2935,7 +2953,7 @@ function enableHorizontalTabScroll(tabGroup) {
   }
 
   tabGroup.setAttribute("data-ha-native-nav-scroll", "");
-  state.tabScrollHandlers.set(tabGroup, { scrollTarget, listeners, restore, syncActive: scheduleActiveSync });
+  state.tabScrollHandlers.set(tabGroup, { scrollTarget, listeners, restore, cancel, syncActive: scheduleActiveSync });
   scheduleActiveSync();
 }
 
@@ -3120,6 +3138,7 @@ function installStyle(root, cssText, tabShadowCss, tabGroupShadowCss, buttonShad
   const nextCssText = rootCss(root, cssText, tabShadowCss, tabGroupShadowCss, buttonShadowCss, iconShadowCss, routeEnabled);
 
   let style = target.querySelector(`#${STYLE_ID}`);
+  if (!nextCssText.trim()) { style?.remove(); return; }
   if (!style) {
     style = document.createElement("style");
     style.id = STYLE_ID;
@@ -3131,60 +3150,91 @@ function installStyle(root, cssText, tabShadowCss, tabGroupShadowCss, buttonShad
   }
 }
 
+// The navigation owns the application shell and header, never card/view subtrees.
+const SHELL_SELECTOR = "home-assistant, home-assistant-main, ha-drawer, app-drawer, partial-panel-resolver, ha-panel-lovelace, hui-root, app-header-layout, ha-app-layout, ha-sidebar";
+const VIEW_HOSTS = new Set(["hui-view", "hui-sections-view", "hui-masonry-view", "hui-panel-view", "ha-sidebar"]);
+function shellElements(selector, root = document, out = []) {
+  out.push(...root.querySelectorAll(selector));
+  for (const host of root.querySelectorAll(SHELL_SELECTOR)) {
+    if (host.shadowRoot && host.localName !== "ha-sidebar") shellElements(selector, host.shadowRoot, out);
+  }
+  return out;
+}
+
 function observeRoot(root) {
   const target = root === document ? document.documentElement : root;
   if (!target || state.observers.has(root)) return;
-
-  const observer = new MutationObserver(() => scheduleApply());
+  const observer = new MutationObserver((records) => {
+    if (records.some((record) => record.type === "attributes"
+      ? record.target.matches?.(`${VIEW_TAB_SELECTOR}, ha-tab-group, .header, hui-root, ha-panel-lovelace, ha-drawer, app-drawer, home-assistant-main`)
+      : [...record.addedNodes, ...record.removedNodes].some((node) => node.nodeType === Node.ELEMENT_NODE && node.localName !== "style"))) scheduleApply();
+  });
   observer.observe(target, {
     attributes: true,
-    attributeFilter: ["active", "aria-current", "aria-selected", "class", "selected"],
+    attributeFilter: ["active", "aria-current", "aria-selected", "class", "selected", "opened", "narrow", "expanded"],
     childList: true,
     subtree: true
   });
   state.observers.set(root, observer);
 }
 
-function walkRoots(root, cssText, tabShadowCss, tabGroupShadowCss, buttonShadowCss, iconShadowCss, routeEnabled) {
+function walkRoots(root, cssText, tabShadowCss, tabGroupShadowCss, buttonShadowCss, iconShadowCss, routeEnabled, seen) {
+  seen.add(root);
   updateMarkedHeaders(root, routeEnabled);
   installStyle(root, cssText, tabShadowCss, tabGroupShadowCss, buttonShadowCss, iconShadowCss, routeEnabled);
   observeRoot(root);
-
   const start = root === document ? document.documentElement : root;
   if (!start) return;
-
-  const walker = document.createTreeWalker(start, NodeFilter.SHOW_ELEMENT);
+  const walker = document.createTreeWalker(start, NodeFilter.SHOW_ELEMENT, {
+    acceptNode: (node) => VIEW_HOSTS.has(node.localName) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
+  });
   let node = walker.currentNode;
   while (node) {
-    if (node.shadowRoot) {
-      walkRoots(node.shadowRoot, cssText, tabShadowCss, tabGroupShadowCss, buttonShadowCss, iconShadowCss, routeEnabled);
-    }
+    if (node.shadowRoot && (node.matches?.(SHELL_SELECTOR) || closestComposed(node, `.header[${NAV_ATTR}]`))) walkRoots(node.shadowRoot, cssText, tabShadowCss, tabGroupShadowCss, buttonShadowCss, iconShadowCss, routeEnabled, seen);
     node = walker.nextNode();
   }
 }
 
 function applyStyles() {
   state.applyTimer = 0;
-  const routeEnabled = allowsCurrentRoute();
-  walkRoots(
-    document,
-    buildCss(state.config),
-    buildTabShadowCss(state.config),
-    buildTabGroupShadowCss(state.config),
-    buildButtonShadowCss(state.config),
-    buildIconShadowCss(state.config),
-    routeEnabled
-  );
+  if (document.hidden) return;
+  const routeEnabled = state.config.enabled && allowsCurrentRoute();
+  if (!state.cssCache) state.cssCache = [
+    buildCss(state.config), buildTabShadowCss(state.config), buildTabGroupShadowCss(state.config),
+    buildButtonShadowCss(state.config), buildIconShadowCss(state.config)
+  ];
+  const seen = new Set();
+  walkRoots(document, ...state.cssCache, routeEnabled, seen);
+  for (const [root, observer] of state.observers) {
+    if (!seen.has(root)) { observer.disconnect(); state.observers.delete(root); }
+  }
+  for (const [tabGroup, record] of state.tabScrollHandlers) {
+    if (!tabGroup.isConnected || !routeEnabled || !closestComposed(tabGroup, `[${NAV_ATTR}]`)) {
+      removeTabScrollHandler(record); state.tabScrollHandlers.delete(tabGroup);
+    }
+  }
+}
+
+function refreshShell() {
+  for (const timer of state.retryTimers) clearTimeout(timer);
+  state.retryTimers.clear();
+  scheduleApply();
+  // Finite retries cover asynchronous shell upgrades without permanent polling.
+  for (const delay of [100, 500]) {
+    const timer = setTimeout(() => { state.retryTimers.delete(timer); scheduleApply(); }, delay);
+    state.retryTimers.add(timer);
+  }
 }
 
 function scheduleApply() {
-  if (state.applyTimer) return;
+  if (state.applyTimer || document.hidden) return;
   state.applyTimer = window.setTimeout(applyStyles, 50);
 }
 
 function start(config) {
   if (config) {
     state.config = normalizeConfig({ ...state.config, ...config });
+    state.cssCache = null;
   }
 
   if (state.started) {
@@ -3194,14 +3244,17 @@ function start(config) {
 
   state.started = true;
   scheduleApply();
-  window.addEventListener("location-changed", scheduleApply);
-  window.addEventListener("popstate", scheduleApply);
+  window.addEventListener("location-changed", refreshShell);
+  window.addEventListener("popstate", refreshShell);
   window.addEventListener("resize", scheduleApply);
+  window.addEventListener("hass-toggle-menu", refreshShell);
   window.addEventListener("pointerdown", onGlobalViewPointerDown, true);
   window.addEventListener("pointerup", onGlobalViewPointerUp, true);
   window.addEventListener("pointercancel", resetGlobalViewGesture, true);
   window.addEventListener("click", onGlobalViewClick, true);
-  window.setInterval(scheduleApply, 2500);
+  document.addEventListener("visibilitychange", refreshShell);
+  for (const tag of SHELL_SELECTOR.split(", ")) customElements.whenDefined(tag).then(refreshShell);
+  refreshShell();
 }
 
 class HaNativeNavPosition extends HTMLElement {

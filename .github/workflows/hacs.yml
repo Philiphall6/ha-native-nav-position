@@ -13,3 +13,20 @@ jobs:
       - uses: hacs/action@main
         with:
           category: plugin
+
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check JavaScript and navigation lifecycle
+        run: |
+          node --check dist/ha-native-nav-position.js
+          pip install playwright==1.62.0
+          python -m playwright install --with-deps chromium
+          python tests/browser_regression.py
