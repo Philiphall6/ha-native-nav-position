@@ -1,4 +1,4 @@
-const VERSION = "1.3.3";
+const VERSION = "1.3.4";
 const TAG_NAME = "ha-native-nav-position";
 const STYLE_ID = "ha-native-nav-position-style-current";
 const NAV_ATTR = "data-ha-native-nav-position-active";
@@ -11,6 +11,7 @@ const VIEW_ICON_Y_OFFSET_VAR = "--ha-native-nav-view-icon-y-offset";
 const CONTENT_Y_OFFSET_VAR = "--ha-native-nav-content-y-offset";
 const MENU_Y_OFFSET_VAR = "--ha-native-nav-menu-y-offset";
 const SIDEBAR_INSET_VAR = "--ha-native-nav-sidebar-inset";
+const VIEWPORT_SHIFT_VAR = "--ha-native-nav-viewport-shift";
 const IOS_VIEW_Y_OFFSET = "0px";
 const TAB_SHADOW_HOSTS = new Set([
   "ha-tab-group-tab",
@@ -1845,7 +1846,7 @@ function buildHeaderCss(config) {
       top: auto !important;
       bottom: calc(${config.offset} + env(safe-area-inset-bottom)) !important;
       z-index: ${config.z_index} !important;
-      transform: translateZ(0) !important;
+      transform: translate3d(0, var(${VIEWPORT_SHIFT_VAR}, 0px), 0) !important;
       ${dockCss}
     }
 
@@ -3205,6 +3206,7 @@ function applyStyles() {
   ];
   const seen = new Set();
   walkRoots(document, ...state.cssCache, routeEnabled, seen);
+  syncViewportAnchor(seen, routeEnabled);
   for (const [root, observer] of state.observers) {
     if (!seen.has(root)) { observer.disconnect(); state.observers.delete(root); }
   }
@@ -3213,6 +3215,90 @@ function applyStyles() {
       removeTabScrollHandler(record); state.tabScrollHandlers.delete(tabGroup);
     }
   }
+}
+
+// iOS can move the visual viewport independently of the CSS fixed-position
+// viewport. Keep the native header in its original DOM and correct only a
+// measured vertical drift. No polling, DOM traversal or full apply on scroll.
+const viewportAnchor = state.viewportAnchor ||= {
+  headers: new Map(), frame: 0, listening: false, viewport: null
+};
+
+function updateViewportAnchor() {
+  viewportAnchor.frame = 0;
+  if (document.hidden) return;
+  const viewport = window.visualViewport;
+  const height = viewport?.height ?? window.innerHeight;
+  const top = viewport?.offsetTop ?? 0;
+  if (!Number.isFinite(height) || height <= 0) return;
+  const updates = [];
+  for (const [header, shift] of viewportAnchor.headers) {
+    if (!header.isConnected) continue;
+    const css = getComputedStyle(header);
+    if (css.position !== "fixed" || (viewport && Math.abs(viewport.scale - 1) > 0.01)) {
+      if (shift) updates.push([header, 0]);
+      continue;
+    }
+    const rect = header.getBoundingClientRect();
+    const gap = Number.parseFloat(css.bottom);
+    if (!rect.height || !Number.isFinite(gap)) continue;
+    const delta = top + height - gap - rect.bottom;
+    if (Math.abs(delta) >= 0.5) {
+      updates.push([header, Math.round((shift + delta) * 100) / 100]);
+    }
+  }
+  // Finish all layout reads before writes. Ignore subpixel rounding jitter.
+  for (const [header, shift] of updates) {
+    if (shift) header.style.setProperty(VIEWPORT_SHIFT_VAR, `${shift}px`);
+    else header.style.removeProperty(VIEWPORT_SHIFT_VAR);
+    viewportAnchor.headers.set(header, shift);
+  }
+}
+
+function scheduleViewportAnchor() {
+  if (!viewportAnchor.frame && viewportAnchor.headers.size && !document.hidden) {
+    viewportAnchor.frame = requestAnimationFrame(updateViewportAnchor);
+  }
+}
+
+function syncViewportAnchor(roots, routeEnabled) {
+  const headers = new Set();
+  const mobile = matchesMobileLayout();
+  const scopeEnabled = !(state.config.mobile_only && !mobile) &&
+    !(state.config.only === "mobile" && !mobile) &&
+    !(state.config.only === "web" && mobile);
+  if (routeEnabled && scopeEnabled && isIOSLike() && state.config.position === "bottom") {
+    for (const root of roots) {
+      for (const header of rootQuerySelectorAll(root, `[${NAV_ATTR}]`)) headers.add(header);
+    }
+  }
+  for (const header of viewportAnchor.headers.keys()) {
+    if (!headers.has(header)) {
+      header.style.removeProperty(VIEWPORT_SHIFT_VAR);
+      viewportAnchor.headers.delete(header);
+    }
+  }
+  for (const header of headers) {
+    if (!viewportAnchor.headers.has(header)) viewportAnchor.headers.set(header, 0);
+  }
+  if (headers.size && !viewportAnchor.listening) {
+    viewportAnchor.listening = true;
+    viewportAnchor.viewport = window.visualViewport;
+    window.addEventListener("scroll", scheduleViewportAnchor, { passive: true, capture: true });
+    window.addEventListener("resize", scheduleViewportAnchor, { passive: true });
+    viewportAnchor.viewport?.addEventListener("scroll", scheduleViewportAnchor, { passive: true });
+    viewportAnchor.viewport?.addEventListener("resize", scheduleViewportAnchor, { passive: true });
+  } else if (!headers.size && viewportAnchor.listening) {
+    window.removeEventListener("scroll", scheduleViewportAnchor, true);
+    window.removeEventListener("resize", scheduleViewportAnchor);
+    viewportAnchor.viewport?.removeEventListener("scroll", scheduleViewportAnchor);
+    viewportAnchor.viewport?.removeEventListener("resize", scheduleViewportAnchor);
+    viewportAnchor.viewport = null;
+    viewportAnchor.listening = false;
+    if (viewportAnchor.frame) cancelAnimationFrame(viewportAnchor.frame);
+    viewportAnchor.frame = 0;
+  }
+  scheduleViewportAnchor();
 }
 
 function refreshShell() {

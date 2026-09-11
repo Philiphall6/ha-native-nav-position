@@ -41,6 +41,20 @@ After a new version is published:
 3. Run **Redownload** or **Update** if HACS offers an update.
 4. Refresh the Home Assistant frontend. On mobile, fully close and reopen the app if the old version is still cached.
 
+## iPhone / iPad scrolling
+
+Version 1.3.4 adds viewport anchoring for the bottom dock on iOS. On scroll or
+viewport resize, it measures the native header against the visible viewport and
+corrects vertical drift while preserving the configured bottom gap and safe area.
+It keeps Home Assistant's header in its original DOM, batches work per animation
+frame and performs no polling. The extra listeners are removed in edit mode,
+on settings pages, with top navigation, or when the plugin is disabled.
+Pinch zoom uses native positioning.
+
+Regression tests cover Chromium and WebKit, including displaced containing blocks,
+visual viewport changes, ordinary scrolling and cleanup. Physical iPhone testing
+is still needed to confirm behavior in the Companion app's WKWebView.
+
 ## Basic Configuration
 
 By default, the plugin places the navigation bar at the bottom on both desktop and mobile:

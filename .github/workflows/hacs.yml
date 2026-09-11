@@ -28,5 +28,6 @@ jobs:
         run: |
           node --check dist/ha-native-nav-position.js
           pip install playwright==1.62.0
-          python -m playwright install --with-deps chromium
+          python -m playwright install --with-deps chromium webkit
           python tests/browser_regression.py
+          python tests/viewport_regression.py
