@@ -30,4 +30,5 @@ jobs:
           pip install playwright==1.62.0
           python -m playwright install --with-deps chromium webkit
           python tests/browser_regression.py
+          python tests/spacing_regression.py
           python tests/viewport_regression.py

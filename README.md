@@ -41,6 +41,16 @@ After a new version is published:
 3. Run **Redownload** or **Update** if HACS offers an update.
 4. Refresh the Home Assistant frontend. On mobile, fully close and reopen the app if the old version is still cached.
 
+## Adaptive dashboard spacing (1.3.5)
+
+Content clearance is reserved once, on the outer dashboard view container. It
+tracks the dock's measured height and edge offset, with a 12px content gap.
+Bottom navigation removes the native top-header spacer; hidden docks reserve
+no bottom space. Native editor spacing returns while editing a dashboard.
+Nested views and cards receive no extra navigation padding. A targeted
+ResizeObserver tracks only active headers and disconnects on disable or editing.
+The legacy top/bottom padding options remain initial CSS fallbacks until measured.
+
 ## iPhone / iPad scrolling
 
 Version 1.3.4 adds viewport anchoring for the bottom dock on iOS. On scroll or

@@ -1,4 +1,4 @@
-const VERSION = "1.3.4";
+const VERSION = "1.3.5";
 const TAG_NAME = "ha-native-nav-position";
 const STYLE_ID = "ha-native-nav-position-style-current";
 const NAV_ATTR = "data-ha-native-nav-position-active";
@@ -1824,18 +1824,12 @@ function buildHeaderCss(config) {
 
       ${sideButtonCss}
 
-      ha-panel-lovelace,
-      hui-root,
-      hui-view-container,
-      #view,
-      main,
-      hui-view,
-      hui-sections-view,
-      hui-masonry-view,
-      hui-panel-view {
-        padding-top: calc(${config.top_padding} + env(safe-area-inset-top)) !important;
-        padding-bottom: 0 !important;
-        scroll-padding-top: calc(${config.top_padding} + env(safe-area-inset-top)) !important;
+      ${headerSelector} ~ hui-view-container,
+      ${headerSelector} ~ #view {
+        padding-top: var(--ha-nav-content-top, calc(${config.top_padding} + env(safe-area-inset-top))) !important;
+        padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+        scroll-padding-top: var(--ha-nav-content-top, ${config.top_padding}) !important;
+        box-sizing: border-box !important;
       }
     `;
   }
@@ -1880,17 +1874,11 @@ function buildHeaderCss(config) {
 
     ${sideButtonCss}
 
-    ha-panel-lovelace,
-    hui-root,
-    hui-view-container,
-    #view,
-    main,
-    hui-view,
-    hui-sections-view,
-    hui-masonry-view,
-    hui-panel-view {
-      padding-bottom: calc(${config.bottom_padding} + env(safe-area-inset-bottom)) !important;
-      scroll-padding-bottom: calc(${config.bottom_padding} + env(safe-area-inset-bottom)) !important;
+    ${headerSelector} ~ hui-view-container,
+    ${headerSelector} ~ #view {
+      padding-top: env(safe-area-inset-top, 0px) !important;
+      padding-bottom: var(--ha-nav-content-bottom, calc(${config.height} + ${config.offset} + 12px + env(safe-area-inset-bottom, 0px))) !important;
+      scroll-padding-bottom: var(--ha-nav-content-bottom, ${config.bottom_padding}) !important;
       box-sizing: border-box !important;
     }
   `;
@@ -3207,6 +3195,7 @@ function applyStyles() {
   const seen = new Set();
   walkRoots(document, ...state.cssCache, routeEnabled, seen);
   syncViewportAnchor(seen, routeEnabled);
+  syncContentSpacing(seen, routeEnabled);
   for (const [root, observer] of state.observers) {
     if (!seen.has(root)) { observer.disconnect(); state.observers.delete(root); }
   }
@@ -3215,6 +3204,49 @@ function applyStyles() {
       removeTabScrollHandler(record); state.tabScrollHandlers.delete(tabGroup);
     }
   }
+}
+
+// Reserve dock clearance on the outer view container only. Inner views/cards
+// keep their native sizes; editing automatically drops the marked-header rules.
+const contentSpacing = { targets: new Map(), observer: null };
+function syncContentSpacing(roots, enabled) {
+  const next = new Map();
+  if (enabled) {
+    for (const root of roots) {
+      for (const header of root.querySelectorAll?.(`.header[${NAV_ATTR}]`) || []) {
+        const container = header.parentElement?.querySelector(":scope > hui-view-container, :scope > #view");
+        if (!container) continue;
+        const css = getComputedStyle(header);
+        // A platform-only configuration must not affect a native static header.
+        if (css.position !== "fixed") continue;
+        const rect = header.getBoundingClientRect();
+        const visible = css.display !== "none" && css.visibility !== "hidden" && rect.height > 0;
+        const edge = parseFloat(state.config.position === "top" ? css.top : css.bottom) || 0;
+        const clearance = visible ? Math.ceil(rect.height + Math.max(0, edge) + 12) : 0;
+        const property = state.config.position === "top" ? "--ha-nav-content-top" : "--ha-nav-content-bottom";
+        const other = state.config.position === "top" ? "--ha-nav-content-bottom" : "--ha-nav-content-top";
+        container.style.removeProperty(other);
+        const value = `${clearance}px`;
+        if (container.style.getPropertyValue(property) !== value) container.style.setProperty(property, value);
+        next.set(header, container);
+      }
+    }
+  }
+  if (!contentSpacing.observer && next.size && typeof ResizeObserver !== "undefined") {
+    contentSpacing.observer = new ResizeObserver(() => scheduleApply());
+  }
+  for (const [header, container] of contentSpacing.targets) {
+    if (next.get(header) !== container) {
+      contentSpacing.observer?.unobserve(header);
+      container.style.removeProperty("--ha-nav-content-top");
+      container.style.removeProperty("--ha-nav-content-bottom");
+    }
+  }
+  for (const [header, container] of next) {
+    if (contentSpacing.targets.get(header) !== container) contentSpacing.observer?.observe(header);
+  }
+  contentSpacing.targets = next;
+  if (!next.size) { contentSpacing.observer?.disconnect(); contentSpacing.observer = null; }
 }
 
 // iOS can move the visual viewport independently of the CSS fixed-position
